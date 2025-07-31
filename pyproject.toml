@@ -26,7 +26,8 @@ classifiers = [
 ]
 
 dependencies = [
-
+    # "endoreg-db",
+    # "lx-anonymizer",
 ]
 
 [project.optional-dependencies]
@@ -48,6 +49,6 @@ packages = ["endo_api"]
 # This section tells uv (used by devenv) to use local paths instead of PyPI
 # uv should install these editably by default for path sources.
 # Ensure the paths are correct relative to *this* pyproject.toml file.
-# Ensure the target directories contain their own pyproject.toml or setup.py.
-endoreg-db = { path = "endoreg-db", editable = true } # Explicitly editable
-lx-anonymizer = { path = "lx-anonymizer", editable = true } # Explicitly editable
+# # Ensure the target directories contain their own pyproject.toml or setup.py.
+# endoreg-db = { path = "libs/endoreg-db", editable = true } # Explicitly editable
+# lx-anonymizer = { path = "libs/lx-anonymizer", editable = true } # Explicitly editable
