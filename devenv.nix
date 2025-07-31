@@ -95,7 +95,7 @@ in
     else
        # Sync quietly if venv exists
        echo "Syncing Python dependencies with uv..."
-       $SYNC_CMD --quiet || echo "Warning: uv sync failed. Environment might be outdated."
+       $SYNC_CMD || echo "Warning: uv sync failed. Environment might be outdated."
     fi
 
     # Activate Python virtual environment managed by uv

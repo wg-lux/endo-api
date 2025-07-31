@@ -27,7 +27,7 @@ classifiers = [
 
 dependencies = [
     # "endoreg-db",
-    # "lx-anonymizer",
+    "lx-anonymizer",
 ]
 
 [project.optional-dependencies]
@@ -51,4 +51,4 @@ packages = ["endo_api"]
 # Ensure the paths are correct relative to *this* pyproject.toml file.
 # # Ensure the target directories contain their own pyproject.toml or setup.py.
 # endoreg-db = { path = "libs/endoreg-db", editable = true } # Explicitly editable
-# lx-anonymizer = { path = "libs/lx-anonymizer", editable = true } # Explicitly editable
+lx-anonymizer = { path = "libs/lx-anonymizer", editable = true } # Explicitly editable
