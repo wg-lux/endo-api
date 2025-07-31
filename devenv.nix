@@ -87,6 +87,8 @@ in
     git submodule init
     git submodule update
 
+    export SYNC_CMD="uv sync"
+
     # Ensure dependencies are synced using uv
     # Check if venv exists. If not, run sync verbosely. If it exists, sync quietly.
     if [ ! -d ".devenv/state/venv" ]; then
@@ -95,7 +97,7 @@ in
     else
        # Sync quietly if venv exists
        echo "Syncing Python dependencies with uv..."
-       $SYNC_CMD || echo "Warning: uv sync failed. Environment might be outdated."
+       $SYNC_CMD --quiet || echo "Warning: uv sync failed. Environment might be outdated."
     fi
 
     # Activate Python virtual environment managed by uv
