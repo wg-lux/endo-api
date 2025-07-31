@@ -1,0 +1,4 @@
+[submodule "libs/endoreg-db"]
+	path = libs/endoreg-db
+	url = https://github.com/wg-lux/endoreg-db.git
+	branch = prototype

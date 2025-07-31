@@ -1,0 +1,53 @@
+[project]
+name = "endo-api"
+version = "1.0.0"
+description = "EndoReg Db API Service"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+
+authors = [
+    { name = "Thomas J. Lux", email = "lux_t1@ukw.de" },
+    { name = "Max Hild" },
+    { name = "Hamza Zahid" },
+    { name = "Peter Kowalczyk" },
+]
+maintainers = [
+    { name = "Thomas J. Lux", email = "lux_t1@ukw.de" },
+    { name = "Max Hild" },
+    { name = "Hamza Zahid" },
+    { name = "Peter Kowalczyk" },
+]
+
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+
+]
+
+[project.optional-dependencies]
+dev = [
+    # Add development tools here, e.g.:
+    # "pytest",
+    # "ruff",
+    # "black",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.setuptools]
+packages = ["endo_api"]
+
+[tool.uv.sources]
+# This section tells uv (used by devenv) to use local paths instead of PyPI
+# uv should install these editably by default for path sources.
+# Ensure the paths are correct relative to *this* pyproject.toml file.
+# Ensure the target directories contain their own pyproject.toml or setup.py.
+endoreg-db = { path = "endoreg-db", editable = true } # Explicitly editable
+lx-anonymizer = { path = "lx-anonymizer", editable = true } # Explicitly editable
