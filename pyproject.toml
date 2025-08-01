@@ -26,9 +26,14 @@ classifiers = [
 ]
 
 dependencies = [
+    "asgiref>=3.9.1",
+    "daphne>=4.2.1",
+    "django-cors-headers>=4.7.0",
+    "django-extensions>=4.1",
     "endoreg-db",
     "lx-anonymizer",
     "mypy>=1.17.1",
+    "psycopg[binary]>=3.2.9",
 ]
 
 [project.optional-dependencies]

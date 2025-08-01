@@ -33,7 +33,7 @@ let
     uvPackage = uvPackage;
   };
 
-  buildInputs = devenv_utils.buildInputs;
+  buildInputs = devenv_utils.buildInputs ++ [ pkgs.zlib ];
   runtimePackages = devenv_utils.runtimePackages;
   lxVars = devenv_utils.lx_vars;
 
@@ -70,6 +70,23 @@ in
 
     set-prod-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_production_settings.py";
     set-dev-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_development_settings.py";
+
+    run-dev-server.exec = ''
+      set-dev-settings
+      echo "Running dev server"
+      echo "Host: ${host}"
+      echo "Port: ${port}"
+      ${pkgs.uv}/bin/uv run python manage.py runserver ${host}:${port}
+    '';
+
+    run-prod-server.exec = ''
+      set-prod-settings
+      ${pkgs.uv}/bin/uv run daphne ${djangoModuleName}.asgi:application -p ${port}
+    '';
+
+    gpu-check.exec = "${pkgs.uv}/bin/uv run python scripts/gpu-check.py";
+
+    ensure-psql.exec = "${pkgs.uv}/bin/uv run python scripts/ensure_psql.py";
   };
 
 
@@ -92,13 +109,16 @@ in
       after = ["deploy:migrate"];
       exec = "${pkgs.uv}/bin/uv run python manage.py load_base_db_data";
     };
-    "deploy:collectstatic".exec = "${pkgs.uv}/bin/uv run python manage.py collectstatic --noinput";
+    "deploy:collectstatic" = {
+      after = ["deploy:load-base-db-data"];
+      exec = "${pkgs.uv}/bin/uv run python manage.py collectstatic --noinput";
+    };
 
 
   };
 
   processes = {
-
+    django.exec = "run-prod-server";
   };
 
   enterShell = ''
@@ -135,6 +155,8 @@ in
     else
       echo "Warning: .env file not found. Please run 'devenv task run env:build' to create it."
     fi
+
+    gpu-check
 
   '';
 }
