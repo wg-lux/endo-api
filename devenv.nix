@@ -1,59 +1,46 @@
-{ pkgs, lib, config, inputs, baseBuildInputs, ... }:
+{ 
+  pkgs, 
+  lib, 
+  config, 
+  inputs, 
+  baseBuildInputs, 
+  ... 
+}:
 let
-  # --- Project Configuration ---
-  DJANGO_MODULE = "endoreg_db";
+  # Set defaults for our custom variables
+  dataDir = "./data";
+  confDir = "./conf";
+  confTemplateDir = "./conf_template";
+  djangoModuleName = "endo_api";
   host = "localhost";
-  port = "8188";
-
-  # --- Directory Structure ---
-  dataDir = "data";
-  importDir = "${dataDir}/import";
-  importVideoDir = "${importDir}/video";
-  importReportDir = "${importDir}/report";
-  importLegacyAnnotationDir = "${importDir}/legacy_annotations";
-  exportDir = "${dataDir}/export";
-  exportFramesRootDir = "${exportDir}/frames";
-  exportFramesSampleExportDir = "${exportFramesRootDir}/test_outputs";
-  modelDir = "${dataDir}/models";
-  confDir = "./conf"; # Define confDir here
-  libDir = "./libs/";
-  lxAnonymizerDir = "${libDir}/lx-anonymizer";
-  endoregDbDir = "${libDir}/endoreg-db";
+  port = "8118";
 
   # Pin to specific Python 3.12 version to match pyproject.toml
   python = pkgs.python312;
   uvPackage = pkgs.uv;
-  
-  buildInputs = with pkgs; [
-    python312
-    stdenv.cc.cc
-    tesseract
-    glib
-    openssh
-    cmake
-    gcc
-    pkg-config
-    protobuf
-    libglvnd
-  ];
-  runtimePackages = with pkgs; [
-    stdenv.cc.cc
-    ffmpeg-headless.bin
-    tesseract
-    uvPackage
-    libglvnd # Add libglvnd for libGL.so.1
-    glib
-    zlib
-    ollama.out
-  ];
 
-  _module.args.buildInputs = baseBuildInputs;
+  devenv_utils = import ./devenv/default.nix {
+    pkgs = pkgs;
+    djangoModuleName = djangoModuleName;
+    host = host;
+    port = port;
+    dataDir = dataDir;
+    confDir = confDir;
+    confTemplateDir = confTemplateDir;
+    uvPackage = uvPackage;
+  };
+
+  buildInputs = devenv_utils.buildInputs;
+  runtimePackages = devenv_utils.runtimePackages;
+  lxVars = devenv_utils.lx_vars;
+
+  # For Debug Purposes lets export lxvars to a json file
+  exportLxVars = pkgs.writeText "export-lx-vars.json" (builtins.toJSON lxVars);
 
 in 
 {
-
   # A dotenv file was found, while dotenv integration is currently not enabled.
-  dotenv.enable = true;
+  dotenv.enable = false;
   dotenv.disableHint = true;
 
   packages = runtimePackages ++ buildInputs;
@@ -63,8 +50,7 @@ in
       with pkgs;
       lib.makeLibraryPath buildInputs
     }:/run/opengl-driver/lib:/run/opengl-driver-32/lib";
-    CONF_DIR = "./conf";
-  };
+  } // lxVars;
 
   languages.python = {
     enable = true;
@@ -74,9 +60,25 @@ in
     };
   };
 
+  scripts = {
+    env_export.exec = ''
+      export $(cat .env | xargs)
+    '';
+  };
+
 
   tasks = {
-  
+    "env:init-conf" = {
+      # after = ["env:psql-pwd-file-exists" "devenv:enterShell"];
+      exec = "${pkgs.uv}/bin/uv run python scripts/make_conf.py";
+    };
+    "env:build" = {
+      description = "Build the .env file";
+      after = ["env:init-conf"];
+      exec = "uv run env_setup.py";
+      # status = "test -f .env";
+    };
+
   };
 
   processes = {
@@ -109,6 +111,15 @@ in
     else
       echo "Warning: uv virtual environment activation script not found. Run 'devenv task run env:clean' and re-enter shell."
     fi
+
+    echo "Exporting environment variables from .env file..."
+    if [ -f ".env" ]; then
+      export $(cat .env | xargs)
+      echo ".env file loaded successfully."
+    else
+      echo "Warning: .env file not found. Please run 'devenv task run env:build' to create it."
+    fi
+
   '';
 }
 

@@ -780,12 +780,14 @@ source = { editable = "." }
 dependencies = [
     { name = "endoreg-db" },
     { name = "lx-anonymizer" },
+    { name = "mypy" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "endoreg-db", editable = "libs/endoreg-db" },
     { name = "lx-anonymizer", editable = "libs/lx-anonymizer" },
+    { name = "mypy", specifier = ">=1.17.1" },
 ]
 provides-extras = ["dev"]
 

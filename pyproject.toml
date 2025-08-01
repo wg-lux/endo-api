@@ -28,6 +28,7 @@ classifiers = [
 dependencies = [
     "endoreg-db",
     "lx-anonymizer",
+    "mypy>=1.17.1",
 ]
 
 [project.optional-dependencies]
