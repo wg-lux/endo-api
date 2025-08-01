@@ -1,4 +1,6 @@
 from pathlib import Path
+import os
+from endoreg_db.utils import DbConfig
 from base_settings import (
     INSTALLED_APPS,
     DEFAULT_AUTO_FIELD,
@@ -22,7 +24,28 @@ from base_settings import (
     # SECURE_BROWSER_XSS_FILTER, 
     # SECURE_CONTENT_TYPE_NOSNIFF, 
 )
-import os
+
+
+db_config_file = os.environ.get("DB_CONFIG_FILE")
+if not db_config_file:
+    raise ValueError("DB_CONFIG_FILE environment variable is not set")
+
+assert isinstance(db_config_file, str), "DB_CONFIG_FILE must be a string path"
+
+
+db_config_file = Path(db_config_file).resolve()
+
+assert db_config_file.exists(), f"Database config file {db_config_file} does not exist"
+
+db_cfg = DbConfig.from_file(db_config_file)
+
+db_user = db_cfg.user
+db_password = db_cfg.password
+db_host = db_cfg.host
+db_port = db_cfg.port
+db_name = db_cfg.name
+
+
 ASSET_DIR = Path(__file__).parent / "tests/assets"
 RUN_VIDEO_TESTS = os.environ.get("RUN_VIDEO_TESTS", "true").lower() == "true"
 
@@ -41,19 +64,15 @@ ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
 # Example PostgreSQL config (adjust as needed)
 DATABASES = {
-    # 'default': {
-    #     'ENGINE': 'django.db.backends.postgresql',
-    #     'NAME': os.environ.get('POSTGRES_DB', 'endoreg_db'),
-    #     'USER': os.environ.get('POSTGRES_USER', 'postgres'),
-    #     'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
-    #     'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
-    #     'PORT': os.environ.get('POSTGRES_PORT', '5432'),
-    # }
-    ## For now, using SQLite for simplicity
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'prod_sim_db.sqlite3',
-    },
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': db_name,
+        'USER': db_user,
+        'PASSWORD': db_password,
+        'HOST': db_host,
+        'PORT': db_port,
+    }
+
 }
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

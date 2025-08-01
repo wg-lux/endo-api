@@ -87,6 +87,7 @@ in
     gpu-check.exec = "${pkgs.uv}/bin/uv run python scripts/gpu-check.py";
 
     ensure-psql.exec = "${pkgs.uv}/bin/uv run python scripts/ensure_psql.py";
+    fetch-db-pwd-file.exec = "${pkgs.uv}/bin/uv run python scripts/fetch_db_pwd_file.py";
   };
 
 

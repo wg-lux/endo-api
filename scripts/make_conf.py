@@ -28,16 +28,14 @@ CONF_TARGETS = {
 
 def main(conf_dir: Path = CONF_TARGETS["root"], template_dir: Path = TEMPLATE_DIR):
     db_template = template_dir / "db.yaml"
-    assert db_template.exists(), f"Missing Template {DB_CFG_PATH}"
+    assert db_template.exists(), f"Missing Template {db_template}"
 
     if not conf_dir.exists():
         conf_dir.mkdir()
 
-    if not CONF_TARGETS["db"].exists():
-        db_cfg = DbConfig.from_file(DB_CFG_PATH)
-        db_cfg.custom_validate()
-        db_cfg.to_file(CONF_TARGETS["db"].as_posix(), ask_override=True)
-
+    db_cfg = DbConfig.from_file(DB_CFG_PATH)
+    db_cfg.custom_validate()
+    db_cfg.to_file(CONF_TARGETS["db"].as_posix(), ask_override=True)
 
 if __name__ == "__main__":
     main()

@@ -40,6 +40,7 @@ let
     CONF_DIR = confDir; 
     CONF_TEMPLATE_DIR = confTemplateDir;
     DB_PWD_FILE = "${confDir}/db_pwd";
+    DB_CONFIG_FILE = "${confDir}/db.yaml";
     WORKING_DIR = builtins.getEnv "PWD";
     HOME_DIR = builtins.getEnv "HOME";
     BASE_URL = "http://${host}:${port}";
@@ -47,6 +48,7 @@ let
     LX_ANONYMIZER_DIR = lxAnonymizerDir;
     ENDOREG_DB_DIR = endoregDbDir;
     LIB_DIR = libDir;
+    LX_MAINTENANCE_PASSWORD_FILE = "/etc/secrets/vault/SCRT_local_password_maintenance_password";
   };
 
 in lx_vars

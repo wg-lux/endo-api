@@ -1,7 +1,20 @@
 from endoreg_db.utils import DbConfig
 from icecream import ic
+import os
+from pathlib import Path
 
-db_cfg = DbConfig.from_file("./conf/db.yaml")
+db_config_file = os.environ.get("DB_CONFIG_FILE")
+if not db_config_file:
+    raise ValueError("DB_CONFIG_FILE environment variable is not set")
+
+assert isinstance(db_config_file, str), "DB_CONFIG_FILE must be a string path"
+
+
+db_config_file = Path(db_config_file).resolve()
+
+assert db_config_file.exists(), f"Database config file {db_config_file} does not exist"
+
+db_cfg = DbConfig.from_file(db_config_file)
 
 db_user = db_cfg.user
 db_password = db_cfg.password
