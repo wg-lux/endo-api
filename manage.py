@@ -5,7 +5,12 @@ import sys
 
 
 def main():
-    """Run administrative tasks."""
+    """
+    Initializes the Django environment and executes command-line administrative tasks.
+    
+    Raises:
+        ImportError: If Django is not installed or cannot be imported.
+    """
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'endo_api.settings')
     try:
         from django.core.management import execute_from_command_line

@@ -27,6 +27,11 @@ CONF_TARGETS = {
 
 
 def main(conf_dir: Path = CONF_TARGETS["root"], template_dir: Path = TEMPLATE_DIR):
+    """
+    Generate the database configuration file from a template if it does not already exist.
+    
+    If the configuration directory does not exist, it is created. If the database configuration file is missing, it is generated from the template, validated, and written to the target location with an option to prompt for override.
+    """
     db_template = template_dir / "db.yaml"
     assert db_template.exists(), f"Missing Template {DB_CFG_PATH}"
 
