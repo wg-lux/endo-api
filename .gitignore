@@ -1,6 +1,8 @@
 # environment
 .env
 conf/
+data/
+*.sqlite3
 
 # Devenv / Direnv
 .devenv/
