@@ -12,8 +12,10 @@ let
   confDir = "./conf";
   confTemplateDir = "./conf_template";
   djangoModuleName = "endo_api";
+  http_protocol = "http";
   host = "localhost";
   port = "8118";
+  base_url = "${http_protocol}://${host}:${port}";
 
   # Pin to specific Python 3.12 version to match pyproject.toml
   python = pkgs.python312;
@@ -24,6 +26,7 @@ let
     djangoModuleName = djangoModuleName;
     host = host;
     port = port;
+    base_url = base_url;
     dataDir = dataDir;
     confDir = confDir;
     confTemplateDir = confTemplateDir;
@@ -100,7 +103,7 @@ in
 
   enterShell = ''
     git submodule init
-    git submodule update
+    git submodule update --remote --recursive
 
     export SYNC_CMD="uv sync"
 

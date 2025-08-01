@@ -4,6 +4,7 @@
   djangoModuleName, 
   host, 
   port, 
+  base_url,
   dataDir,
   confDir, 
   confTemplateDir,
@@ -18,6 +19,7 @@ let
     djangoModuleName = djangoModuleName;
     host = host;
     port = port;
+    base_url = base_url;
   };
   # import build inputs from build_inputs.nix
   buildInputs = import ./build_inputs.nix { inherit pkgs; };
