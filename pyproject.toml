@@ -26,7 +26,7 @@ classifiers = [
 ]
 
 dependencies = [
-    # "endoreg-db",
+    "endoreg-db",
     "lx-anonymizer",
 ]
 
@@ -50,5 +50,8 @@ packages = ["endo_api"]
 # uv should install these editably by default for path sources.
 # Ensure the paths are correct relative to *this* pyproject.toml file.
 # # Ensure the target directories contain their own pyproject.toml or setup.py.
-# endoreg-db = { path = "libs/endoreg-db", editable = true } # Explicitly editable
+endoreg-db = { path = "libs/endoreg-db", editable = true } # Explicitly editable
 lx-anonymizer = { path = "libs/lx-anonymizer", editable = true } # Explicitly editable
+
+[tool.uv] # Remove when endoreg-db pyproject.toml is updated to not include a local endoreg-db source
+override-dependencies = ["lx-anonymizer==0.7.0"]
