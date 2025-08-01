@@ -61,9 +61,12 @@ in
   };
 
   scripts = {
-    env_export.exec = ''
+    env-export.exec = ''
       export $(cat .env | xargs)
     '';
+
+    set-prod-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_production_settings.py";
+    set-dev-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_development_settings.py";
   };
 
 
@@ -78,6 +81,16 @@ in
       exec = "uv run env_setup.py";
       # status = "test -f .env";
     };
+
+    "deploy:migrate" = { 
+      exec = "${pkgs.uv}/bin/uv run python manage.py migrate";
+    };
+    "deploy:load-base-db-data" = {
+      after = ["deploy:migrate"];
+      exec = "${pkgs.uv}/bin/uv run python manage.py load_base_db_data";
+    };
+    "deploy:collectstatic".exec = "${pkgs.uv}/bin/uv run python manage.py collectstatic --noinput";
+
 
   };
 
