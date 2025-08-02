@@ -110,6 +110,8 @@ in
     env-build.exec = "${pkgs.uv}/bin/uv run env_setup.py";
     env-export.exec = ''
       export $(cat .env | xargs)
+      echo ".env file loaded successfully."
+      echo "DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE"
     '';
     deploy-migrate.exec = "${pkgs.uv}/bin/uv run python manage.py migrate";
     deploy-load-base-db-data.exec = "${pkgs.uv}/bin/uv run python manage.py load_base_db_data";
