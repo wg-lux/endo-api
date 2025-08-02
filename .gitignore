@@ -3,6 +3,7 @@
 conf/
 data/
 *.sqlite3
+staticfiles/
 
 # Devenv / Direnv
 .devenv/

@@ -43,7 +43,7 @@ let
 in 
 {
   # A dotenv file was found, while dotenv integration is currently not enabled.
-  dotenv.enable = false;
+  dotenv.enable = true;
   dotenv.disableHint = true;
 
   packages = runtimePackages ++ buildInputs;
@@ -64,34 +64,64 @@ in
   };
 
   scripts = {
-    env-export.exec = ''
-      export $(cat .env | xargs)
-    '';
+    
 
     set-prod-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_production_settings.py";
     set-dev-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_development_settings.py";
 
     run-dev-server.exec = ''
+
+      env-pipe
       set-dev-settings
       echo "Running dev server"
       echo "Host: ${host}"
       echo "Port: ${port}"
+      deploy-pipe
       ${pkgs.uv}/bin/uv run python manage.py runserver ${host}:${port}
     '';
 
+    env-pipe.exec = ''
+      env-fetch-db-pwd-file
+      env-init-conf
+      env-build
+      env-export
+    '';
+
+    deploy-pipe.exec = ''
+      deploy-migrate
+      deploy-load-base-db-data
+      deploy-collectstatic
+    '';
+
     run-prod-server.exec = ''
+      env-pipe
       set-prod-settings
+      echo "Running production server"
+      echo "Port: ${port}"
+      deploy-pipe
       ${pkgs.uv}/bin/uv run daphne ${djangoModuleName}.asgi:application -p ${port}
     '';
 
     gpu-check.exec = "${pkgs.uv}/bin/uv run python scripts/gpu-check.py";
 
     ensure-psql.exec = "${pkgs.uv}/bin/uv run python scripts/ensure_psql.py";
-    fetch-db-pwd-file.exec = "${pkgs.uv}/bin/uv run python scripts/fetch_db_pwd_file.py";
+    env-fetch-db-pwd-file.exec = "${pkgs.uv}/bin/uv run python scripts/fetch_db_pwd_file.py";
+    env-init-conf.exec = "${pkgs.uv}/bin/uv run python scripts/make_conf.py";
+    env-build.exec = "${pkgs.uv}/bin/uv run env_setup.py";
+    env-export.exec = ''
+      export $(cat .env | xargs)
+    '';
+    deploy-migrate.exec = "${pkgs.uv}/bin/uv run python manage.py migrate";
+    deploy-load-base-db-data.exec = "${pkgs.uv}/bin/uv run python manage.py load_base_db_data";
+    deploy-collectstatic.exec = "${pkgs.uv}/bin/uv run python manage.py collectstatic --noinput";
   };
 
 
   tasks = {
+    "env:fetch-db-pwd-file" = {
+      description = "Fetch the database password file";
+      exec = "${pkgs.uv}/bin/uv run python scripts/fetch_db_pwd_file.py";
+    };
     "env:init-conf" = {
       # after = ["env:psql-pwd-file-exists" "devenv:enterShell"];
       exec = "${pkgs.uv}/bin/uv run python scripts/make_conf.py";
