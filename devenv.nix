@@ -81,7 +81,6 @@ in
     '';
 
     env-pipe.exec = ''
-      env-fetch-db-pwd-file
       env-init-conf
       env-build
       env-export

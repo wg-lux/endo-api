@@ -45,5 +45,8 @@ In its current state the default deployment on a fresh luxnix system needs follo
 - first rebuild after activating the endo-api service will need some time as lots of dependencies are build
 - check with 'sudo journalctl -xeu endo-api-boot' (doesnt auto update, close and re-open for updates)
 - will most likely fail due to initially missing .env file (is actually created but most likely some timing issue causes failure)
+- after initial deployment, we need to ensure
+  - we got a db_pwd file (e.g., /home/endoreg-service-user/endo-api/conf/db_pwd)
+  - local postgres is configured correctly (run "ensure-psql" script, requires sudo privileges)
 - Restart Service should make it run
-- Make sure to update the db_pwd file (by default, we expect it at '~/secrets/vault/SCRT_local_password_maintenance_password')
+
