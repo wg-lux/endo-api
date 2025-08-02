@@ -20,6 +20,7 @@ let
   libDir = "./libs/";
   lxAnonymizerDir = "${libDir}/lx-anonymizer";
   endoregDbDir = "${libDir}/endoreg-db";
+  homeDir = builtins.getEnv "HOME";
 
   lx_vars = {
     DJANGO_MODULE = djangoModuleName;
@@ -42,13 +43,13 @@ let
     DB_PWD_FILE = "${confDir}/db_pwd";
     DB_CONFIG_FILE = "${confDir}/db.yaml";
     WORKING_DIR = builtins.getEnv "PWD";
-    HOME_DIR = builtins.getEnv "HOME";
+    HOME_DIR = homeDir;
     BASE_URL = "http://${host}:${port}";
     FILE_LOG_LEVEL = "INFO";
     LX_ANONYMIZER_DIR = lxAnonymizerDir;
     ENDOREG_DB_DIR = endoregDbDir;
     LIB_DIR = libDir;
-    LX_MAINTENANCE_PASSWORD_FILE = "/etc/secrets/vault/SCRT_local_password_maintenance_password";
+    LX_MAINTENANCE_PASSWORD_FILE = "${homeDir}/secrets/vault/SCRT_local_password_maintenance_password";
   };
 
 in lx_vars
