@@ -50,17 +50,13 @@ ASSET_DIR = Path(__file__).parent / "tests/assets"
 RUN_VIDEO_TESTS = os.environ.get("RUN_VIDEO_TESTS", "true").lower() == "true"
 
 # Production settings
-DEBUG = os.environ.get("DJANGO_DEBUG", "False")  # Changed from True to False for production
-if DEBUG.lower() == "true":
-    DEBUG = True
-else:
-    DEBUG = False
+DEBUG = os.environ.get("DJANGO_DEBUG", "False").lower() == "true"
 
-# It's best to set this via environment variable in production
-SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "replace-this-with-a-secure-key")
+# Must be set via environment variable in production for security
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
 
 #TODO in a real production project, you would set this to a list of your domain names
-ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
+ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
 # Example PostgreSQL config (adjust as needed)
 DATABASES = {
@@ -77,8 +73,8 @@ DATABASES = {
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
-# Disable HTTPS redirect for demonstration
+# Disabled for local deployment, change to fetch from environment in production
+#TODO
 SECURE_SSL_REDIRECT = False
-# Optionally, also disable secure cookies for demo
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
