@@ -154,8 +154,8 @@ try:
         # Add paths and config from nix_vars if missing
         # Ensure paths are NOT quoted
         vars_to_add = {
-            "DJANGO_HOST": nix_vars.get("HOST"),
-            "DJANGO_PORT": nix_vars.get("PORT"),
+            "DJANGO_HOST": nix_vars.get("DJANGO_HOST"),
+            "DJANGO_PORT": nix_vars.get("DJANGO_PORT"),
             "DJANGO_CONF_DIR": str(conf_dir),
             "HOME_DIR": str(nix_vars_paths.get("HOME_DIR")),
             "WORKING_DIR": str(nix_vars_paths.get("WORKING_DIR")),
