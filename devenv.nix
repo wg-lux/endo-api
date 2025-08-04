@@ -102,6 +102,7 @@ in
     '';
 
     run-prod-server.exec = ''
+  
       env-pipe
       # Detect if running in luxnix environment and use appropriate settings
       if [ "$CENTRAL_NODE" = "true" ]; then
@@ -112,6 +113,12 @@ in
       fi
       echo "Running production server"
       echo "Port: ${port}"
+
+
+      # print settings module and other important variables for transparency
+      echo "DJANGO_SETTINGS_MODULE: $DJANGO_SETTINGS_MODULE"
+      echo "BASE_URL: $BASE_URL"
+
       deploy-pipe
       ${pkgs.uv}/bin/uv run daphne ${djangoModuleName}.asgi:application -p ${port}
     '';
