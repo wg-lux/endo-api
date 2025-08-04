@@ -1,29 +1,8 @@
 from pathlib import Path
 import os
 from endoreg_db.utils import DbConfig
-from base_settings import (
-    INSTALLED_APPS,
-    DEFAULT_AUTO_FIELD,
-    TIME_ZONE,
-    STATIC_URL,
-    STATIC_ROOT,
-    MEDIA_ROOT,
-    MEDIA_URL,
-    BASE_DIR,
-    TEMPLATES,
-    ROOT_URLCONF,
-    MIDDLEWARE,
-    LOGGING,
-    BASE_URL,
-    # SECURE_SSL_REDIRECT, 
-    # SESSION_COOKIE_SECURE, 
-    # CSRF_COOKIE_SECURE, 
-    # SECURE_HSTS_SECONDS, 
-    # SECURE_HSTS_INCLUDE_SUBDOMAINS, 
-    # SECURE_HSTS_PRELOAD, 
-    # SECURE_BROWSER_XSS_FILTER, 
-    # SECURE_CONTENT_TYPE_NOSNIFF, 
-)
+# Import all base settings (Django pattern for settings files)
+from .settings_base import *  # noqa: F403,F401
 
 
 db_config_file = os.environ.get("DB_CONFIG_FILE")
@@ -46,7 +25,7 @@ db_port = db_cfg.port
 db_name = db_cfg.name
 
 
-ASSET_DIR = Path(__file__).parent / "tests/assets"
+ASSET_DIR = Path(__file__).parent / "tests/assets"  # noqa: F405
 RUN_VIDEO_TESTS = os.environ.get("RUN_VIDEO_TESTS", "true").lower() == "true"
 
 # Production settings
@@ -78,3 +57,16 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+
+# Import luxnix local settings if available (for managed deployments)
+# This will override the above settings with production values
+try:
+    from local_settings import *  # noqa: F403,F401
+    print("Loaded luxnix local_settings.py for production")
+except ImportError:
+    print("No local_settings.py found - using default production settings")
+    # Import stub to satisfy linters in development
+    try:
+        from .local_settings_stub import *  # noqa: F403,F401
+    except ImportError:
+        pass

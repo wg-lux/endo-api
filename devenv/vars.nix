@@ -26,6 +26,8 @@ let
     DJANGO_MODULE = djangoModuleName;
     DJANGO_SETTINGS_MODULE_PRODUCTION = "${djangoModuleName}.settings_prod";
     DJANGO_SETTINGS_MODULE_DEVELOPMENT = "${djangoModuleName}.settings_dev";
+    # Add central node settings support for luxnix compatibility
+    DJANGO_SETTINGS_MODULE_CENTRAL = "${djangoModuleName}.settings_central";
     DJANGO_HOST = host;
     DJANGO_PORT = port;
     DATA_DIR = dataDir;

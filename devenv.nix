@@ -7,15 +7,15 @@
   ... 
 }:
 let
-  # Set defaults for our custom variables
-  dataDir = "./data";
-  confDir = "./conf";
-  confTemplateDir = "./conf_template";
-  djangoModuleName = "endo_api";
-  http_protocol = "http";
-  host = "localhost";
-  port = "8118";
-  base_url = "${http_protocol}://${host}:${port}";
+  # Replace hardcoded values with environment variables, providing fallbacks
+  dataDir = let env = builtins.getEnv "DATA_DIR"; in if env != "" then env else (let env2 = builtins.getEnv "STORAGE_DIR"; in if env2 != "" then env2 else "./data");
+  confDir = let env = builtins.getEnv "CONF_DIR"; in if env != "" then env else "./conf";
+  confTemplateDir = let env = builtins.getEnv "CONF_TEMPLATE_DIR"; in if env != "" then env else "./conf_template";
+  djangoModuleName = let env = builtins.getEnv "DJANGO_MODULE"; in if env != "" then env else "endo_api";
+  http_protocol = let env = builtins.getEnv "HTTP_PROTOCOL"; in if env != "" then env else "http";
+  host = let env = builtins.getEnv "DJANGO_HOST"; in if env != "" then env else "localhost";
+  port = let env = builtins.getEnv "DJANGO_PORT"; in if env != "" then env else "8118";
+  base_url = let env = builtins.getEnv "BASE_URL"; in if env != "" then env else "${http_protocol}://${host}:${port}";
 
   # Pin to specific Python 3.12 version to match pyproject.toml
   python = pkgs.python312;
@@ -68,6 +68,9 @@ in
 
     set-prod-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_production_settings.py";
     set-dev-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_development_settings.py";
+    set-central-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_central_settings.py";
+    
+    test-luxnix-compatibility.exec = "${pkgs.uv}/bin/uv run python scripts/test_luxnix_compatibility.py";
 
     run-dev-server.exec = ''
 
@@ -81,8 +84,14 @@ in
     '';
 
     env-pipe.exec = ''
-      env-init-conf
-      env-build
+      # Skip local config generation if local_settings.py exists (luxnix managed)
+      if [ ! -f "local_settings.py" ]; then
+        env-init-conf
+        env-build
+      else
+        echo "Detected luxnix managed environment (local_settings.py exists)"
+        echo "Skipping local configuration generation"
+      fi
       env-export
     '';
 
@@ -94,7 +103,13 @@ in
 
     run-prod-server.exec = ''
       env-pipe
-      set-prod-settings
+      # Detect if running in luxnix environment and use appropriate settings
+      if [ "$CENTRAL_NODE" = "true" ]; then
+        echo "Running as central node"
+        set-central-settings
+      else
+        set-prod-settings
+      fi
       echo "Running production server"
       echo "Port: ${port}"
       deploy-pipe
@@ -108,7 +123,9 @@ in
     env-init-conf.exec = "${pkgs.uv}/bin/uv run python scripts/make_conf.py";
     env-build.exec = "${pkgs.uv}/bin/uv run env_setup.py";
     env-export.exec = ''
-      export $(cat .env | xargs)
+      set -a
+      source .env
+      set +a
       echo ".env file loaded successfully."
       echo "DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE"
     '';
@@ -182,8 +199,13 @@ in
 
     echo "Exporting environment variables from .env file..."
     if [ -f ".env" ]; then
-      export $(cat .env | xargs)
+      set -a
+      source .env
+      set +a
       echo ".env file loaded successfully."
+    elif [ -f "local_settings.py" ]; then
+      echo "Detected luxnix managed environment - using system environment variables"
+      echo "No .env file needed"
     else
       echo "Warning: .env file not found. Please run 'devenv task run env:build' to create it."
     fi
