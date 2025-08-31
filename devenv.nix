@@ -7,15 +7,25 @@
   ... 
 }:
 let
-  # Replace hardcoded values with environment variables, providing fallbacks
-  dataDir = let env = builtins.getEnv "DATA_DIR"; in if env != "" then env else (let env2 = builtins.getEnv "STORAGE_DIR"; in if env2 != "" then env2 else "./data");
-  confDir = let env = builtins.getEnv "CONF_DIR"; in if env != "" then env else "./conf";
-  confTemplateDir = let env = builtins.getEnv "CONF_TEMPLATE_DIR"; in if env != "" then env else "./conf_template";
-  djangoModuleName = let env = builtins.getEnv "DJANGO_MODULE"; in if env != "" then env else "endo_api";
-  http_protocol = let env = builtins.getEnv "HTTP_PROTOCOL"; in if env != "" then env else "http";
-  host = let env = builtins.getEnv "DJANGO_HOST"; in if env != "" then env else "localhost";
-  port = let env = builtins.getEnv "DJANGO_PORT"; in if env != "" then env else "8118";
+  # Import app configuration  
+  appConfig = import ./app_config.nix;
+
+  # Extract configuration values (can still be overridden by environment variables)
+  dataDir = let env = builtins.getEnv "DATA_DIR"; in if env != "" then env else appConfig.paths.data;
+  confDir = let env = builtins.getEnv "CONF_DIR"; in if env != "" then env else appConfig.paths.conf;
+  confTemplateDir = let env = builtins.getEnv "CONF_TEMPLATE_DIR"; in if env != "" then env else appConfig.paths.confTemplate;
+  djangoModuleName = let env = builtins.getEnv "DJANGO_MODULE"; in if env != "" then env else appConfig.app.djangoModule;
+  http_protocol = let env = builtins.getEnv "HTTP_PROTOCOL"; in if env != "" then env else appConfig.server.protocol;
+  host = let env = builtins.getEnv "DJANGO_HOST"; in if env != "" then env else appConfig.server.host;
+  port = let env = builtins.getEnv "DJANGO_PORT"; in if env != "" then env else appConfig.server.port;
   base_url = let env = builtins.getEnv "BASE_URL"; in if env != "" then env else "${http_protocol}://${host}:${port}";
+
+  # Development/Production mode detection
+  # Use environment variable with fallback to development mode
+  # This makes mode switching dynamic without requiring devenv rebuild
+  envMode = builtins.getEnv "ENDO_API_MODE";
+  detectedMode = if envMode == "production" then "production" else "development";
+  isDev = detectedMode != "production";
 
   # Pin to specific Python 3.12 version to match pyproject.toml
   python = pkgs.python312;
@@ -23,6 +33,8 @@ let
 
   devenv_utils = import ./devenv/default.nix {
     pkgs = pkgs;
+    lib = lib;
+    appConfig = appConfig;
     djangoModuleName = djangoModuleName;
     host = host;
     port = port;
@@ -31,9 +43,10 @@ let
     confDir = confDir;
     confTemplateDir = confTemplateDir;
     uvPackage = uvPackage;
+    isDev = isDev;
   };
 
-  buildInputs = devenv_utils.buildInputs ++ [ pkgs.zlib ];
+  buildInputs = devenv_utils.buildInputs;
   runtimePackages = devenv_utils.runtimePackages;
   lxVars = devenv_utils.lx_vars;
 
@@ -45,15 +58,95 @@ in
   # A dotenv file was found, while dotenv integration is currently not enabled.
   dotenv.enable = true;
   dotenv.disableHint = true;
+  cachix.enable = true;
+  packages = with pkgs; [
+    stdenv.cc.cc
+    nodejs_22
+    yarn
+    libglvnd
+    inotify-tools 
+    python312Packages.inotify-simple
+    python312Packages.watchdog
+    ffmpeg_6-headless
+    cudaPackages.cuda_nvcc
+  ] ++ runtimePackages;
 
-  packages = runtimePackages ++ buildInputs;
-
+  # Use modular environment configuration
   env = {
+    # LD_LIBRARY_PATH with OpenGL support (critical for CUDA)
     LD_LIBRARY_PATH = "${
       with pkgs;
       lib.makeLibraryPath buildInputs
     }:/run/opengl-driver/lib:/run/opengl-driver-32/lib";
-  } // lxVars;
+    
+    # PyTorch CUDA allocation configuration
+    PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True";
+    
+    # Mode indicator
+    ENDO_API_MODE = if isDev then "development" else "production";
+    
+    # Database configuration based on mode
+    DATABASE_ENGINE = if isDev then appConfig.database.dev.engine else appConfig.database.prod.engine;
+    DATABASE_NAME = if isDev then appConfig.database.dev.name else appConfig.database.prod.name;
+    DATABASE_HOST = if isDev then appConfig.database.dev.host else appConfig.database.prod.host;
+    DATABASE_PORT = if isDev then appConfig.database.dev.port else appConfig.database.prod.port;
+    DATABASE_USER = if isDev then appConfig.database.dev.user else appConfig.database.prod.user;
+    DATABASE_PASSWORD = if isDev then appConfig.database.dev.password else "";
+    
+    # Remove GPU visibility variables - they interfere with PyTorch CUDA detection
+    # NVIDIA_VISIBLE_DEVICES = "all";
+    # CUDA_VISIBLE_DEVICES = "all";
+  } // devenv_utils.lx_vars;
+
+  # Comprehensive testing using enterTest
+  enterTest = ''
+    # Source common test functions
+    source ${./test-functions.sh}
+    
+    # Run the test suite based on TEST_SUITE environment variable
+    test_suite=''${TEST_SUITE:-quick}
+    
+    echo "🧪 Running DevEnv Test Suite: $test_suite"
+    echo "========================================="
+    
+    # Track overall result
+    test_result=0
+    
+    case "$test_suite" in
+      "quick"|"q")
+        run_quick_tests || test_result=1
+        ;;
+      "workflows"|"w") 
+        run_workflow_tests || test_result=1
+        ;;
+      "containers"|"c")
+        run_container_tests || test_result=1
+        ;;
+      "e2e"|"end-to-end")
+        run_e2e_tests || test_result=1
+        ;;
+      "full"|"all"|"f")
+        run_full_tests || test_result=1
+        ;;
+      "ci")
+        run_ci_tests || test_result=1
+        ;;
+      *)
+        echo "Unknown test suite: $test_suite"
+        echo "Available: quick, workflows, containers, e2e, full, ci"
+        exit 1
+        ;;
+    esac
+    
+    # Report final result
+    if [ $test_result -eq 0 ]; then
+        echo "✅ All tests in suite '$test_suite' passed!"
+        exit 0
+    else
+        echo "❌ Some tests in suite '$test_suite' failed!"
+        exit 1
+    fi
+  '';
 
   languages.python = {
     enable = true;
@@ -63,121 +156,43 @@ in
     };
   };
 
-  scripts = {
-    
+  # Use modular scripts configuration  
+  scripts = devenv_utils.scripts;
 
-    set-prod-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_production_settings.py";
-    set-dev-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_development_settings.py";
-    set-central-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_central_settings.py";
-    
-    test-luxnix-compatibility.exec = "${pkgs.uv}/bin/uv run python scripts/test_luxnix_compatibility.py";
+  # Use modular tasks configuration
+  tasks = devenv_utils.tasks;
 
-    run-dev-server.exec = ''
+  # Use modular processes configuration
+  processes = devenv_utils.processes;
 
-      env-pipe
-      set-dev-settings
-      echo "Running dev server"
-      echo "Host: ${host}"
-      echo "Port: ${port}"
-      deploy-pipe
-      ${pkgs.uv}/bin/uv run python manage.py runserver ${host}:${port}
-    '';
+  # Use modular containers configuration
+  containers = devenv_utils.containers;
 
-    env-pipe.exec = ''
-      # Skip local config generation if local_settings.py exists (luxnix managed)
-      if [ ! -f "local_settings.py" ]; then
-        env-init-conf
-        env-build
-      else
-        echo "Detected luxnix managed environment (local_settings.py exists)"
-        echo "Skipping local configuration generation"
-      fi
-      env-export
-    '';
-
-    deploy-pipe.exec = ''
-      deploy-migrate
-      deploy-load-base-db-data
-      deploy-collectstatic
-    '';
-
-    run-prod-server.exec = ''
-  
-      env-pipe
-      # Detect if running in luxnix environment and use appropriate settings
-      if [ "$CENTRAL_NODE" = "true" ]; then
-        echo "Running as central node"
-        set-central-settings
-      else
-        set-prod-settings
-      fi
-      echo "Running production server"
-      echo "Port: ${port}"
-
-
-      # print settings module and other important variables for transparency
-      echo "DJANGO_SETTINGS_MODULE: $DJANGO_SETTINGS_MODULE"
-      echo "BASE_URL: $BASE_URL"
-
-      deploy-pipe
-      ${pkgs.uv}/bin/uv run daphne ${djangoModuleName}.asgi:application -p ${port}
-    '';
-
-    gpu-check.exec = "${pkgs.uv}/bin/uv run python scripts/gpu-check.py";
-
-    ensure-psql.exec = "${pkgs.uv}/bin/uv run python scripts/ensure_psql.py";
-    env-fetch-db-pwd-file.exec = "${pkgs.uv}/bin/uv run python scripts/fetch_db_pwd_file.py";
-    env-init-conf.exec = "${pkgs.uv}/bin/uv run python scripts/make_conf.py";
-    env-build.exec = "${pkgs.uv}/bin/uv run env_setup.py";
-    env-export.exec = ''
-      set -a
-      source .env
-      set +a
-      echo ".env file loaded successfully."
-      echo "DJANGO_SETTINGS_MODULE=$DJANGO_SETTINGS_MODULE"
-    '';
-    deploy-migrate.exec = "${pkgs.uv}/bin/uv run python manage.py migrate";
-    deploy-load-base-db-data.exec = "${pkgs.uv}/bin/uv run python manage.py load_base_db_data";
-    deploy-collectstatic.exec = "${pkgs.uv}/bin/uv run python manage.py collectstatic --noinput";
-  };
-
-
-  tasks = {
-    "env:fetch-db-pwd-file" = {
-      description = "Fetch the database password file";
-      exec = "${pkgs.uv}/bin/uv run python scripts/fetch_db_pwd_file.py";
-    };
-    "env:init-conf" = {
-      # after = ["env:psql-pwd-file-exists" "devenv:enterShell"];
-      exec = "${pkgs.uv}/bin/uv run python scripts/make_conf.py";
-    };
-    "env:build" = {
-      description = "Build the .env file";
-      after = ["env:init-conf"];
-      exec = "uv run env_setup.py";
-      # status = "test -f .env";
-    };
-
-    "deploy:migrate" = { 
-      exec = "${pkgs.uv}/bin/uv run python manage.py migrate";
-    };
-    "deploy:load-base-db-data" = {
-      after = ["deploy:migrate"];
-      exec = "${pkgs.uv}/bin/uv run python manage.py load_base_db_data";
-    };
-    "deploy:collectstatic" = {
-      after = ["deploy:load-base-db-data"];
-      exec = "${pkgs.uv}/bin/uv run python manage.py collectstatic --noinput";
-    };
-
-
-  };
-
-  processes = {
-    django.exec = "run-prod-server";
-  };
+  # Use modular services configuration  
+  services = devenv_utils.services;
 
   enterShell = ''
+    # Dynamic mode detection at shell entry
+    if [ -f ".mode" ]; then
+      MODE_FROM_FILE=$(cat .mode 2>/dev/null | tr -d '\n' | tr -d ' ')
+      if [ "$MODE_FROM_FILE" = "production" ]; then
+        export ENDO_API_MODE="production"
+      else
+        export ENDO_API_MODE="development"
+      fi
+    else
+      # Fallback to environment variable or default
+      export ENDO_API_MODE="''${ENDO_API_MODE:-development}"
+    fi
+
+    echo "===== Endo API Development Environment ====="
+    if [ "$ENDO_API_MODE" = "production" ]; then
+      echo "Mode: Production (PostgreSQL)"
+    else
+      echo "Mode: Development (SQLite)"
+    fi
+    echo "============================================="
+    
     git submodule init
     git submodule update --remote --recursive
 
@@ -217,8 +232,29 @@ in
       echo "Warning: .env file not found. Please run 'devenv task run env:build' to create it."
     fi
 
-    gpu-check
+    ${if isDev then ''
+      # Development mode setup will be done dynamically
+      if [ "$ENDO_API_MODE" = "development" ]; then
+        echo "Development mode: SQLite database will be used"
+        echo "Local PostgreSQL service available via 'devenv up postgres'"
+      fi
+    '' else ''
+      # Production mode setup will be done dynamically  
+      if [ "$ENDO_API_MODE" = "production" ]; then
+        echo "Production mode: Expecting external PostgreSQL and Redis services"
+        echo "Ensure your database connection settings are properly configured"
+      fi
+    ''}
 
+    # Dynamic mode messaging
+    if [ "$ENDO_API_MODE" = "production" ]; then
+      echo "Production mode: Expecting external PostgreSQL and Redis services"
+      echo "Ensure your database connection settings are properly configured"
+    else
+      echo "Development mode: SQLite database will be used"
+      echo "Local PostgreSQL service available via 'devenv up postgres'"
+    fi
+
+    gpu-check
   '';
 }
-

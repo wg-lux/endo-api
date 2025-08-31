@@ -11,6 +11,9 @@ let
     pkg-config
     protobuf
     libglvnd
+    zlib
+
   ];
+  
 
 in buildInputs

@@ -1,0 +1,71 @@
+# Development Dockerfile for EndoReg API with DevEnv
+# Optimized multi-stage build for maximum caching efficiency
+FROM nixos/nix:2.18.1 as nix-base
+
+# Configure Nix for optimal caching
+RUN echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf \
+    && echo "substituters = https://cache.nixos.org https://devenv.cachix.org" >> /etc/nix/nix.conf \
+    && echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" >> /etc/nix/nix.conf \
+    && echo "max-jobs = auto" >> /etc/nix/nix.conf
+
+# Install DevEnv and essential tools in single layer for better caching
+RUN nix-channel --add https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz nixpkgs \
+    && nix-channel --update \
+    && nix profile install --accept-flake-config github:cachix/devenv/latest \
+    && nix profile install nixpkgs#cachix \
+    && cachix use devenv
+
+# Stage 2: DevEnv Environment Build (Cached Layer)
+FROM nix-base as devenv-cache
+
+WORKDIR /app
+
+# Copy DevEnv configuration files first (these change rarely = better caching)
+COPY devenv.nix devenv.yaml devenv.lock ./
+COPY devenv/ ./devenv/  
+COPY app_config.nix ./
+
+# Initialize git for submodules (required by DevEnv)
+RUN git init
+
+# Copy libs for dependency resolution
+COPY libs/ ./libs/
+
+# Copy Python project files for dependency resolution
+COPY pyproject.toml uv.lock* ./
+COPY README.md ./
+
+# Pre-build DevEnv environment - this layer will be cached!
+# Only rebuilds if devenv config or dependencies change
+RUN devenv shell -- echo "✅ DevEnv environment with FFmpeg, OpenCV, CUDA cached successfully"
+
+# Verify critical dependencies are available
+RUN devenv shell -- which ffmpeg || echo "FFmpeg check"
+RUN devenv shell -- python -c "import sys; print(f'Python {sys.version}')" || echo "Python check"
+
+# Stage 3: Development Runtime (Fast Startup)
+FROM devenv-cache as development
+
+# Copy remaining application files (these change frequently)
+COPY . /app
+
+# Create runtime directories
+RUN mkdir -p /app/data /app/conf /app/staticfiles
+
+# Set optimized environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV DJANGO_HOST=0.0.0.0
+ENV DJANGO_PORT=8118
+ENV ENDO_API_MODE=development
+ENV DJANGO_SETTINGS_MODULE=endo_api.settings_dev
+ENV DJANGO_MODULE=endo_api
+
+# Expose port
+EXPOSE 8118
+
+# Use optimized development entrypoint
+COPY docker-entrypoint.sh /app/
+RUN chmod +x /app/docker-entrypoint.sh
+
+CMD ["/app/docker-entrypoint.sh"]

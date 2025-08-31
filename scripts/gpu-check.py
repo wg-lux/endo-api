@@ -2,7 +2,7 @@ import torch
 
 # Define a function which creates a file (YYYY-MM-DD_HH-MM-SS.txt) in the directory "./data" and writes a message to it
 
-def write_message(message=None):
+def write_message(message=None, save=False):
     import os
     import datetime
 
@@ -28,6 +28,9 @@ def write_message(message=None):
     date_time = now.strftime("%Y-%m-%d_%H-%M-%S")
 
     # Create a file with the current date and time
+    if not save:
+        return None
+    
     file_name = f"data/{date_time}.txt"
     with open(file_name, "w") as file:
         file.write(message)
@@ -48,7 +51,7 @@ def main():
         print(f"  Multiprocessor Count: {properties.multi_processor_count}")
 
 
-    write_message()
+    # write_message()
 
 
 if __name__ == "__main__":

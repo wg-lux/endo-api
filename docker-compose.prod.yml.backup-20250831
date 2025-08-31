@@ -1,0 +1,88 @@
+# Production Docker Compose for EndoReg API
+# ==========================================
+#
+# DEPRECATED: Use docker-manager.sh to generate up-to-date configurations
+# This file contains hardcoded values and should be replaced with generated files.
+#
+# Generate updated configuration:
+#   ./docker-manager.sh generate-compose-prod
+#
+version: '3.8'
+
+services:
+  endo-api:
+    image: endo-api-prod
+    container_name: endo-api-production
+    restart: unless-stopped
+    ports:
+      - "8118:8118"  # Map host port to container port
+    environment:
+      - ENDO_API_MODE=production
+      - DJANGO_DEBUG=False
+      - DJANGO_HOST=0.0.0.0
+      - DJANGO_PORT=8118
+      - WORKING_DIR=/app
+      - STORAGE_DIR=/app/data
+      - DJANGO_MODULE=endo_api
+      # Database connection (override as needed)
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_NAME=endoregDbLocal
+      - DATABASE_USER=endoregDbLocal
+      # Redis connection
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      # Persistent data volumes
+      - ./data:/app/data:rw
+      - ./conf:/app/conf:ro
+      # Log directory
+      - ./data/logs:/app/logs:rw
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - endo-api-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: endo-api-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=endoregDbLocal
+      - POSTGRES_USER=endoregDbLocal
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db_password
+    secrets:
+      - db_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./conf/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"  # Expose for external access if needed
+    networks:
+      - endo-api-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: endo-api-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"  # Expose for external access if needed
+    networks:
+      - endo-api-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  endo-api-network:
+    driver: bridge
+
+secrets:
+  db_password:
+    file: ./conf/db_pwd

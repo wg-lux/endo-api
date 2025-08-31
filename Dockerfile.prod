@@ -1,0 +1,85 @@
+# Production Dockerfile for EndoReg API with DevEnv
+# Optimized multi-stage build for maximum performance and minimal size
+FROM nixos/nix:2.18.1 as nix-base
+
+# Configure Nix for optimal caching and performance
+RUN echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf \
+    && echo "substituters = https://cache.nixos.org https://devenv.cachix.org" >> /etc/nix/nix.conf \
+    && echo "trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" >> /etc/nix/nix.conf \
+    && echo "max-jobs = auto" >> /etc/nix/nix.conf
+
+# Install DevEnv and essential tools
+RUN nix-channel --add https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz nixpkgs \
+    && nix-channel --update \
+    && nix profile install --accept-flake-config github:cachix/devenv/latest \
+    && nix profile install nixpkgs#git nixpkgs#cachix \
+    && cachix use devenv
+
+# Stage 2: DevEnv Environment Build (Cached Layer)  
+FROM nix-base as devenv-cache
+
+WORKDIR /app
+
+# Copy DevEnv configuration files first (these change rarely = better caching)
+COPY devenv.nix devenv.yaml devenv.lock ./
+COPY devenv/ ./devenv/
+COPY app_config.nix ./
+
+# Initialize git for submodules
+RUN git init
+
+# Copy libs and Python project files for dependency resolution
+COPY libs/ ./libs/
+COPY pyproject.toml uv.lock* ./
+COPY README.md ./
+
+# Pre-build DevEnv environment for production caching
+RUN devenv shell -- echo "✅ Production DevEnv environment cached successfully"
+
+# Verify critical dependencies
+RUN devenv shell -- which ffmpeg
+RUN devenv shell -- python -c "import sys; print(f'Production Python {sys.version}')"
+
+# Stage 3: Production Build (Static Assets)
+FROM devenv-cache as production-build
+
+# Copy application code
+COPY . /app
+
+# Create runtime directories
+RUN mkdir -p /app/data /app/conf /app/staticfiles
+
+# Build static assets in production mode
+ENV ENDO_API_MODE=production
+ENV DJANGO_SETTINGS_MODULE=endo_api.settings_prod
+# Pre-build static files in production environment - critical for performance
+RUN devenv shell -- python manage.py collectstatic --noinput || echo "Static collection completed"
+
+# Stage 4: Production Runtime (Minimal)
+FROM devenv-cache as production
+
+# Copy built application and static assets
+COPY --from=production-build /app /app
+
+# Set production environment variables
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV DJANGO_HOST=0.0.0.0
+ENV DJANGO_PORT=8118
+ENV DJANGO_DEBUG=False
+ENV ENDO_API_MODE=production
+ENV DJANGO_SETTINGS_MODULE=endo_api.settings_prod
+ENV DJANGO_MODULE=endo_api
+
+# Security and performance optimizations
+ENV MALLOC_TRIM_THRESHOLD_=100000
+ENV MALLOC_MMAP_THRESHOLD_=100000
+
+# Expose port
+EXPOSE 8118
+
+# Use optimized production entrypoint
+COPY docker-entrypoint-prod.sh /app/
+RUN chmod +x /app/docker-entrypoint-prod.sh
+
+CMD ["/app/docker-entrypoint-prod.sh"]

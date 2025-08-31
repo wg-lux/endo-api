@@ -9,7 +9,7 @@ let
     libglvnd 
     glib
     zlib
-    ollama.out
+
   ];
 
 

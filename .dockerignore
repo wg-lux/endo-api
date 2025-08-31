@@ -1,0 +1,119 @@
+# Docker ignore file to reduce build context and improve build speed
+
+# Git and version control
+.git
+.gitignore
+.gitmodules
+.gitattributes
+
+# Python cache and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+!libs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# DevEnv state (will be rebuilt in container)
+.devenv/
+.direnv/
+result
+result-*
+
+# Include essential libraries
+!libs/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Documentation (keep essential ones for builds)
+*.md
+!README.md
+!libs/*/README.md
+
+# Data and media files (should be mounted as volumes)
+data/logs/
+data/export/
+data/import/
+data/*.log
+media/
+staticfiles/
+
+# Configuration that should be mounted or generated
+conf_template/
+*.env
+.env.*
+conf/db_pwd
+
+# Test files
+tests/
+test_*.py
+*_test.py
+.pytest_cache/
+pytest_cache/
+.coverage
+.nyc_output
+.cache
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+*.pid
+*.seed
+*.cover
+*.bak
+*.backup
+*.sql
+
+# Container-related files (except entrypoints)
+docker-compose*.yml
+Dockerfile*
+!docker-entrypoint*.sh
+
+# Build artifacts
+*.tar.gz
+*.zip
+*.rar

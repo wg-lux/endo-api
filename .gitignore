@@ -1,5 +1,7 @@
 # environment
 .env
+.mode
+.mode-env
 conf/
 data/
 *.sqlite3
