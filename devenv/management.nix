@@ -149,37 +149,86 @@ else:
         MODE_SUFFIX=$([[ "$ENDO_API_MODE" == "production" ]] && echo "prod" || echo "dev")
         
         echo "Building native DevEnv container: $MODE_SUFFIX"
+        echo "⏱️  This may take a few minutes for the first build..."
         
         # Build the DevEnv container using native devenv container system
-        CONTAINER_SPEC=$(devenv container build "$MODE_SUFFIX" 2>&1 | tee /tmp/devenv-build.log)
+        CONTAINER_SPEC=$(timeout 600 devenv container build "$MODE_SUFFIX" 2>&1 | tee /tmp/devenv-build.log)
         
-        if [ $? -eq 0 ]; then
+        BUILD_EXIT_CODE=$?
+        
+        if [ $BUILD_EXIT_CODE -eq 0 ]; then
           # Extract the container specification path from the output
           SPEC_PATH=$(echo "$CONTAINER_SPEC" | grep -E '^/nix/store.*\.json$' | head -1)
           
           if [ -n "$SPEC_PATH" ]; then
             echo "✅ DevEnv container built successfully"
             echo "Container specification: $SPEC_PATH"
-            
-            # Copy to Docker daemon for local testing (optional)
-            echo "Copying container to Docker daemon..."
-            if devenv container copy "$MODE_SUFFIX" 2>/dev/null; then
-              echo "✅ Container copied to Docker daemon"
-              
-              # List available images to verify
-              echo "Available container images:"
-              docker images | grep endo-api | head -5
-            else
-              echo "⚠️  Failed to copy to Docker daemon, but DevEnv container is ready"
-              echo "Use 'devenv container run $MODE_SUFFIX' to test"
-            fi
+            echo ""
+            echo "Next steps:"
+            echo "  1. Run 'manage container:copy' to copy to container runtime"
+            echo "  2. Run 'manage run' to start the container"
           else
             echo "⚠️  Container built but couldn't find specification path"
             cat /tmp/devenv-build.log
           fi
+        elif [ $BUILD_EXIT_CODE -eq 124 ]; then
+          echo "❌ DevEnv container build timed out (10 minutes)"
+          echo "Build log saved to /tmp/devenv-build.log"
+          exit 1
         else
           echo "❌ Container build failed"
           cat /tmp/devenv-build.log
+          exit 1
+        fi
+      '';
+    };
+
+    "container:copy" = {
+      description = "Copy DevEnv container to container runtime (Docker/Podman)";
+      exec = ''
+        echo "📦 Copying DevEnv container to container runtime..."
+        
+        MODE_SUFFIX=$([[ "$ENDO_API_MODE" == "production" ]] && echo "prod" || echo "dev")
+        
+        # Detect available container runtime
+        CONTAINER_RUNTIME=""
+        if command -v podman >/dev/null 2>&1; then
+          CONTAINER_RUNTIME="podman"
+          echo "🐳 Using Podman as container runtime"
+        elif command -v docker >/dev/null 2>&1; then
+          CONTAINER_RUNTIME="docker"
+          echo "🐳 Using Docker as container runtime"
+        else
+          echo "❌ No container runtime found (neither Docker nor Podman)"
+          exit 1
+        fi
+        
+        echo "⏱️  Copying container to $CONTAINER_RUNTIME (this may take several minutes)..."
+        
+        # Copy with timeout - this can take a long time for large images
+        if timeout 900 devenv container copy "$MODE_SUFFIX" 2>/dev/null; then
+          echo "✅ Container copied to $CONTAINER_RUNTIME successfully"
+          
+          # Verify the image exists
+          IMAGE_NAME="endo-api-$MODE_SUFFIX"
+          if $CONTAINER_RUNTIME images "$IMAGE_NAME" | grep -q "$IMAGE_NAME"; then
+            echo "✅ Container image verified: $IMAGE_NAME:latest"
+            echo ""
+            echo "Available container images:"
+            $CONTAINER_RUNTIME images | grep endo-api | head -5
+            echo ""
+            echo "Ready to run! Use 'manage run' to start the container"
+          else
+            echo "⚠️  Container copy completed but image not found in $CONTAINER_RUNTIME"
+          fi
+        else
+          COPY_EXIT_CODE=$?
+          if [ $COPY_EXIT_CODE -eq 124 ]; then
+            echo "❌ Container copy timed out (15 minutes)"
+          else  
+            echo "❌ Failed to copy container to $CONTAINER_RUNTIME"
+          fi
+          echo "You can still use 'devenv container run $MODE_SUFFIX' directly"
           exit 1
         fi
       '';
@@ -191,45 +240,84 @@ else:
         echo "🚀 Running DevEnv container for mode: $ENDO_API_MODE"
         
         MODE_SUFFIX=$([[ "$ENDO_API_MODE" == "production" ]] && echo "prod" || echo "dev")
+        CONTAINER_NAME="endo-api-$MODE_SUFFIX"
+        INSTANCE_NAME="$CONTAINER_NAME"
         
-        # First try to run using DevEnv's native container runner
-        echo "Starting DevEnv container: $MODE_SUFFIX"
-        if devenv container run "$MODE_SUFFIX" 2>/dev/null; then
-          echo "✅ DevEnv container started successfully"
+        # Detect available container runtime
+        CONTAINER_RUNTIME=""
+        if command -v podman >/dev/null 2>&1; then
+          CONTAINER_RUNTIME="podman"
+        elif command -v docker >/dev/null 2>&1; then
+          CONTAINER_RUNTIME="docker"  
         else
-          echo "⚠️  DevEnv container run failed, trying Docker fallback..."
+          echo "❌ No container runtime found (neither Docker nor Podman)"
+          echo "Falling back to DevEnv native container run..."
           
-          # Fallback to Docker if DevEnv container run fails
-          CONTAINER_NAME="endo-api-$MODE_SUFFIX"
-          INSTANCE_NAME="$CONTAINER_NAME"
-          
-          # GPU support detection
-          ${gpuArgs}
-          
-          # Stop existing container
-          if docker ps -q -f name="$INSTANCE_NAME" | grep -q .; then
-            docker stop "$INSTANCE_NAME" 2>/dev/null || docker kill "$INSTANCE_NAME" 2>/dev/null || true
-          fi
-          
-          # Remove existing container
-          docker rm "$INSTANCE_NAME" 2>/dev/null || true
-          
-          # Check if image exists in Docker
-          if docker images "$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"; then
-            echo "Using Docker image: $CONTAINER_NAME"
-            docker run -d \
-              --name "$INSTANCE_NAME" \
-              ${builtins.concatStringsSep " \\\n  " (commonContainerArgs "$ENDO_API_MODE")} \
-              $GPU_ARGS \
-              "$CONTAINER_NAME:latest"
-            
-            echo "✅ Docker container started: $INSTANCE_NAME"
-            echo "   Access: http://localhost:${appConfig.server.port}"
-            echo "   Logs: docker logs -f $INSTANCE_NAME"
+          # Fallback to DevEnv native run (slower but doesn't require Docker/Podman)
+          echo "Starting DevEnv container: $MODE_SUFFIX"
+          echo "⏱️  Initial start may take 8-10 minutes to build shell environment..."
+          if timeout 720 devenv container run "$MODE_SUFFIX"; then
+            echo "✅ DevEnv container started successfully"
+            return 0
           else
-            echo "❌ No container image found. Please run 'manage build' first"
-            exit 1
+            echo "❌ DevEnv container run failed or timed out (12 minutes)"
+            return 1
           fi
+        fi
+        
+        echo "🐳 Using $CONTAINER_RUNTIME as container runtime"
+        
+        # Check if image exists in container runtime
+        if ! $CONTAINER_RUNTIME images "$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"; then
+          echo "❌ Container image '$CONTAINER_NAME:latest' not found in $CONTAINER_RUNTIME"
+          echo ""
+          echo "Please run the following commands first:"
+          echo "  1. manage build           # Build the DevEnv container"
+          echo "  2. manage container:copy  # Copy to $CONTAINER_RUNTIME"
+          echo "  3. manage run             # Start the container"
+          exit 1
+        fi
+        
+        echo "✅ Found container image: $CONTAINER_NAME:latest"
+        
+        # GPU support detection
+        ${gpuArgs}
+        
+        # Stop existing container if running
+        if $CONTAINER_RUNTIME ps -q -f name="$INSTANCE_NAME" | grep -q .; then
+          echo "🛑 Stopping existing container: $INSTANCE_NAME"
+          $CONTAINER_RUNTIME stop "$INSTANCE_NAME" 2>/dev/null || $CONTAINER_RUNTIME kill "$INSTANCE_NAME" 2>/dev/null || true
+        fi
+        
+        # Remove existing container
+        $CONTAINER_RUNTIME rm "$INSTANCE_NAME" 2>/dev/null || true
+        
+        echo "🚀 Starting container: $INSTANCE_NAME"
+        echo "⏱️  Initial startup may take 1-2 minutes to setup environment..."
+        
+        # Start the container using cached image
+        if $CONTAINER_RUNTIME run -d \
+          --name "$INSTANCE_NAME" \
+          ${builtins.concatStringsSep " \\\n  " (commonContainerArgs "$ENDO_API_MODE")} \
+          $GPU_ARGS \
+          "$CONTAINER_NAME:latest"; then
+          
+          echo "✅ Container started: $INSTANCE_NAME"
+          echo ""
+          echo "Container Info:"
+          echo "  Name: $INSTANCE_NAME"
+          echo "  Image: $CONTAINER_NAME:latest"  
+          echo "  Runtime: $CONTAINER_RUNTIME"
+          echo "  Access: http://localhost:${appConfig.server.port}"
+          echo ""
+          echo "Useful commands:"
+          echo "  $CONTAINER_RUNTIME logs -f $INSTANCE_NAME    # View logs"
+          echo "  $CONTAINER_RUNTIME exec -it $INSTANCE_NAME bash  # Shell access"
+          echo "  manage stop                                   # Stop container"
+          
+        else
+          echo "❌ Failed to start container with $CONTAINER_RUNTIME"
+          exit 1
         fi
       '';
     };
@@ -239,24 +327,32 @@ else:
       exec = ''
         echo "🛑 Stopping containers..."
         
-        # Stop DevEnv containers first (if running)
-        for mode in dev prod processes; do
-          echo "Checking DevEnv container: $mode"
-          # DevEnv doesn't have a direct stop command, so we check Docker containers
-        done
+        # Detect available container runtime
+        CONTAINER_RUNTIME=""
+        if command -v podman >/dev/null 2>&1; then
+          CONTAINER_RUNTIME="podman"
+        elif command -v docker >/dev/null 2>&1; then
+          CONTAINER_RUNTIME="docker"  
+        else
+          echo "⚠️  No container runtime found (neither Docker nor Podman)"
+          echo "Cannot stop containers via container runtime"
+          exit 0
+        fi
         
-        # Stop Docker containers (both regular and test containers)
+        echo "🐳 Using $CONTAINER_RUNTIME to stop containers"
+        
+        # Stop Docker/Podman containers (both regular and test containers)
         for mode in dev prod; do
           # Stop regular containers (used by manage run)
           CONTAINER_NAME="endo-api-$mode"
           
-          if docker ps -q -f name="$CONTAINER_NAME" | grep -q .; then
-            echo "Stopping Docker container: $CONTAINER_NAME"
-            if docker stop "$CONTAINER_NAME" 2>/dev/null; then
+          if $CONTAINER_RUNTIME ps -q -f name="$CONTAINER_NAME" | grep -q .; then
+            echo "Stopping container: $CONTAINER_NAME"
+            if $CONTAINER_RUNTIME stop "$CONTAINER_NAME" 2>/dev/null; then
               echo "✅ Successfully stopped $CONTAINER_NAME"
             else
               echo "⚠️  Normal stop failed, trying force kill..."
-              if docker kill "$CONTAINER_NAME" 2>/dev/null; then
+              if $CONTAINER_RUNTIME kill "$CONTAINER_NAME" 2>/dev/null; then
                 echo "✅ Force killed $CONTAINER_NAME"
               else
                 echo "❌ Failed to stop $CONTAINER_NAME"
@@ -266,13 +362,13 @@ else:
           
           # Also stop test containers (used by test suite)
           TEST_INSTANCE_NAME="$CONTAINER_NAME-test"
-          if docker ps -q -f name="$TEST_INSTANCE_NAME" | grep -q .; then
+          if $CONTAINER_RUNTIME ps -q -f name="$TEST_INSTANCE_NAME" | grep -q .; then
             echo "Stopping test container: $TEST_INSTANCE_NAME"
-            if docker stop "$TEST_INSTANCE_NAME" 2>/dev/null; then
+            if $CONTAINER_RUNTIME stop "$TEST_INSTANCE_NAME" 2>/dev/null; then
               echo "✅ Successfully stopped $TEST_INSTANCE_NAME"
             else
               echo "⚠️  Normal stop failed, trying force kill..."
-              if docker kill "$TEST_INSTANCE_NAME" 2>/dev/null; then
+              if $CONTAINER_RUNTIME kill "$TEST_INSTANCE_NAME" 2>/dev/null; then
                 echo "✅ Force killed $TEST_INSTANCE_NAME"
               else
                 echo "❌ Failed to stop $TEST_INSTANCE_NAME"

@@ -72,7 +72,7 @@ echo "🗃️ Running migrations..."
 devenv shell -- python manage.py migrate || echo "Migration failed, continuing..."
 
 echo "� Setting up CUDA environment..."
-devenv shell -- devenv task run env:setup-cuda || echo "CUDA setup completed with warnings"
+devenv shell -- devenv tasks run env:setup-cuda || echo "CUDA setup completed with warnings"
 
 echo "�🌟 Starting development server with DevEnv environment..."
 echo "    ✅ FFmpeg, OpenCV, CUDA dependencies loaded"
