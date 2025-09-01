@@ -88,7 +88,7 @@ test_docker_availability() {
 test_dockerfile_syntax() {
     print_test_header "Dockerfile Syntax Validation"
     
-    for dockerfile in Dockerfile.dev Dockerfile.prod; do
+    for dockerfile in container/Dockerfile.dev container/Dockerfile.prod; do
         if [ -f "$dockerfile" ]; then
             # Simple syntax check by parsing the dockerfile
             if grep -E "^FROM|^RUN|^COPY|^CMD|^EXPOSE|^ENV" "$dockerfile" > /dev/null; then

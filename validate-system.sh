@@ -12,18 +12,16 @@ echo ""
 echo "📁 Checking key files..."
 files=(
     "app_config.nix"
-    "config-manager.sh"
-    "docker-manager.sh"
-    "test-containers.sh"
     "devenv.nix"
     "devenv/containers.nix"
     "devenv/scripts.nix"
     "devenv/environment.nix"
+    "tests/legacy/test-containers.sh"
     "scripts/env_manager.py"
     "tests/smoke_tests.py"
     "tests/test_database_connectivity.py"
-    "CENTRALIZED_CONFIG_GUIDE.md"
-    "NATIVE_DEVENV_CONTAINERS_GUIDE.md"
+    "docs/CENTRALIZED_CONFIG_GUIDE.md"
+    "docs/NATIVE_DEVENV_CONTAINERS_GUIDE.md"
 )
 
 missing_files=()
@@ -73,7 +71,7 @@ fi
 
 # Test container configuration
 echo "🐳 Testing container configuration..."
-if ./test-containers.sh --ci >/dev/null 2>&1; then
+if ./tests/legacy/test-containers.sh --ci >/dev/null 2>&1; then
     echo "✅ Container configuration tests passed"
 else
     echo "⚠️  Container configuration tests had issues (check manually)"
@@ -113,7 +111,7 @@ echo ""
 echo "Testing:"
 echo "  python3 tests/smoke_tests.py       # Quick validation"
 echo "  python3 tests/test_database_connectivity.py  # Database tests"
-echo "  ./test-containers.sh                # Container tests"
+echo "  ./tests/legacy/test-containers.sh   # Legacy container tests"
 echo ""
 echo "Container Management:"
 echo "  ./docker-manager.sh build-all      # Build dev and prod containers"

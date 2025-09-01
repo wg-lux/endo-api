@@ -121,6 +121,7 @@ endo-api/
 ├── devenv.nix                  # 🐚 Development environment
 ├── manage                      # 🎮 Unified management script
 ├── devenv/                     # 📦 Modular DevEnv components
+├── container/                  # 🐳 Container infrastructure
 ├── endo_api/                   # 🐍 Django application
 ├── scripts/                    # 🔨 Utility scripts
 ├── data/                       # 💾 Application data
@@ -137,6 +138,16 @@ devenv/
 ├── build_inputs.nix            # 📚 System dependencies
 ├── runtime_packages.nix        # 🏃 Runtime packages
 └── vars.nix                    # 📊 Path variables
+```
+
+### Container Infrastructure
+```
+container/
+├── Dockerfile.dev              # 🏗️ Development container
+├── Dockerfile.prod             # 🏭 Production container
+├── docker-entrypoint.sh        # 🚀 Development entrypoint
+├── docker-entrypoint-prod.sh   # 🚀 Production entrypoint
+└── README.md                   # 📖 Container documentation
 ```
 
 ## 🔧 Configuration
@@ -333,6 +344,14 @@ git commit -m "Your changes"
 
 ## 📚 Additional Resources
 
+### Project Documentation
+- **[Complete Documentation](docs/README.md)** - Comprehensive project documentation index
+- **[Implementation Reports](docs/implementation-reports/)** - Detailed technical reports on system development
+- **[Configuration Guide](docs/CENTRALIZED_CONFIG_GUIDE.md)** - Advanced configuration and customization
+- **[Container Guide](docs/NATIVE_DEVENV_CONTAINERS_GUIDE.md)** - Detailed container usage and deployment
+- **[Container Infrastructure](container/README.md)** - Container files documentation and usage
+
+### External Resources
 - **DevEnv Documentation**: [devenv.sh](https://devenv.sh)
 - **Django Documentation**: [djangoproject.com](https://www.djangoproject.com)
 - **Nix Documentation**: [nixos.org](https://nixos.org)

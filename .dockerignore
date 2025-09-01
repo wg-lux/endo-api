@@ -111,7 +111,7 @@ tmp/
 # Container-related files (except entrypoints)
 docker-compose*.yml
 Dockerfile*
-!docker-entrypoint*.sh
+!container/docker-entrypoint*.sh
 
 # Build artifacts
 *.tar.gz

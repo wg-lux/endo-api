@@ -320,7 +320,7 @@ else:
               TEST_SUITE=ci devenv test
               ;;
             "legacy")
-              ./test-runner.sh "''${3:-quick}"
+              ./tests/legacy/test-runner.sh "''${3:-quick}"
               ;;
             *)
               echo "Available test suites:"

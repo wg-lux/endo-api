@@ -79,7 +79,7 @@ ENV MALLOC_MMAP_THRESHOLD_=100000
 EXPOSE 8118
 
 # Use optimized production entrypoint
-COPY docker-entrypoint-prod.sh /app/
+COPY container/docker-entrypoint-prod.sh /app/
 RUN chmod +x /app/docker-entrypoint-prod.sh
 
 CMD ["/app/docker-entrypoint-prod.sh"]

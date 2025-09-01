@@ -65,7 +65,7 @@ ENV DJANGO_MODULE=endo_api
 EXPOSE 8118
 
 # Use optimized development entrypoint
-COPY docker-entrypoint.sh /app/
+COPY container/docker-entrypoint.sh /app/
 RUN chmod +x /app/docker-entrypoint.sh
 
 CMD ["/app/docker-entrypoint.sh"]
