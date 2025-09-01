@@ -1,5 +1,5 @@
 {
-  "timestamp": "2025-09-01T13:20:34+02:00",
+  "timestamp": "2025-09-01T14:48:48+02:00",
   "validation_port": 10123,
   "project_root": "/home/admin/dev/endo-api",
   "summary": {
@@ -78,7 +78,7 @@
   "environment": {
     "devenv_active": impure,
     "django_settings": "endo_api.settings_dev",
-    "endo_api_mode": "production",
+    "endo_api_mode": "development",
     "python_path": "/home/admin/dev/endo-api/.devenv/state/venv/bin/python3",
     "docker_available": true
   }

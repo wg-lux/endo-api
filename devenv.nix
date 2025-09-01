@@ -103,39 +103,43 @@ in
 
   # Comprehensive testing using enterTest
   enterTest = ''
-    # Source common test functions from archive
-    source ${./tests/archive/test-functions.sh}
-    
-    # Run the test suite based on TEST_SUITE environment variable
-    test_suite=''${TEST_SUITE:-quick}
-    
-    echo "🧪 Running DevEnv Test Suite: $test_suite"
+    # Modern test framework using system-validation.sh
+    TEST_SUITE_VAR="''${TEST_SUITE:-quick}"
+    echo "🧪 Running DevEnv Test Suite: $TEST_SUITE_VAR"
     echo "========================================="
     
     # Track overall result
     test_result=0
     
-    case "$test_suite" in
+    case "$TEST_SUITE_VAR" in
       "quick"|"q")
-        run_quick_tests || test_result=1
+        echo "🚀 Running quick validation tests..."
+        bash scripts/core/system-validation.sh --skip-containers || test_result=1
         ;;
       "workflows"|"w") 
-        run_workflow_tests || test_result=1
+        echo "🔄 Running workflow validation tests..."
+        bash scripts/core/system-validation.sh --skip-containers || test_result=1
+        echo "🔧 Testing environment setup..."
+        python3 scripts/core/setup.py --status-only || test_result=1
         ;;
       "containers"|"c")
-        run_container_tests || test_result=1
+        echo "🐳 Running container validation tests..."
+        bash scripts/core/system-validation.sh || test_result=1
         ;;
       "e2e"|"end-to-end")
-        run_e2e_tests || test_result=1
+        echo "🎯 Running end-to-end validation tests..."
+        bash scripts/core/system-validation.sh || test_result=1
         ;;
       "full"|"all"|"f")
-        run_full_tests || test_result=1
+        echo "🌟 Running complete system validation..."
+        bash scripts/core/system-validation.sh --verbose || test_result=1
         ;;
       "ci")
-        run_ci_tests || test_result=1
+        echo "🤖 Running CI-optimized validation..."
+        bash scripts/core/system-validation.sh --skip-containers || test_result=1
         ;;
       *)
-        echo "Unknown test suite: $test_suite"
+        echo "Unknown test suite: $TEST_SUITE_VAR"
         echo "Available: quick, workflows, containers, e2e, full, ci"
         exit 1
         ;;
@@ -143,10 +147,10 @@ in
     
     # Report final result
     if [ $test_result -eq 0 ]; then
-        echo "✅ All tests in suite '$test_suite' passed!"
+        echo "✅ All tests in suite '$TEST_SUITE_VAR' passed!"
         exit 0
     else
-        echo "❌ Some tests in suite '$test_suite' failed!"
+        echo "❌ Some tests in suite '$TEST_SUITE_VAR' failed!"
         exit 1
     fi
   '';

@@ -165,7 +165,7 @@ else:
             echo "Container specification: $SPEC_PATH"
             echo ""
             echo "Next steps:"
-            echo "  1. Run 'manage container:copy' to copy to container runtime"
+            echo "  1. Run 'manage copy' to copy to container runtime"
             echo "  2. Run 'manage run' to start the container"
           else
             echo "⚠️  Container built but couldn't find specification path"
@@ -273,7 +273,7 @@ else:
           echo ""
           echo "Please run the following commands first:"
           echo "  1. manage build           # Build the DevEnv container"
-          echo "  2. manage container:copy  # Copy to $CONTAINER_RUNTIME"
+          echo "  2. manage copy            # Copy to $CONTAINER_RUNTIME"
           echo "  3. manage run             # Start the container"
           exit 1
         fi
@@ -534,6 +534,9 @@ else:
         "build")
           devenv tasks run container:build
           ;;
+        "copy")
+          devenv tasks run container:copy
+          ;;
         "run")
           devenv tasks run container:run
           ;;
@@ -604,6 +607,7 @@ else:
           echo ""
           echo "Containers:"  
           echo "  manage build     - Build container for current mode"
+          echo "  manage copy      - Copy container to runtime (Docker/Podman)"
           echo "  manage run       - Run container for current mode"
           echo "  manage stop      - Stop all containers"
           echo "  manage restart   - Restart containers"
@@ -622,7 +626,7 @@ else:
           echo "  manage test ci         - CI/CD compatible tests"
           echo ""
           echo "Examples:"
-          echo "  manage dev && manage build && manage run"
+          echo "  manage dev && manage build && manage copy && manage run"
           echo "  manage prod && manage deploy"
           ;;
       esac
