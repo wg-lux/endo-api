@@ -38,9 +38,8 @@ let
     inherit isDev appConfig; 
   };
   
-  tasks = import ./tasks.nix { 
-    inherit pkgs; 
-  };
+  # No legacy tasks - functionality moved to management.nix
+  tasks = {};
   
   processes = import ./processes.nix { 
     inherit isDev; 
@@ -63,9 +62,9 @@ in
   runtimePackages = runtimePackages;
   
   # Integrate centralized management with legacy modular components
-  # Priority: management.nix tasks override legacy tasks.nix
+  # Unified system: management.nix provides all functionality
   scripts = scripts // managementSystem.scripts;
-  tasks = managementSystem.tasks // tasks;  # management.nix takes priority
+  tasks = managementSystem.tasks // tasks;  # All tasks come from management.nix
   
   services = services;
   processes = processes;

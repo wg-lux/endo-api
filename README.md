@@ -1,7 +1,7 @@
 # Endo API
 **Modern Django Endoscopy API with Unified DevEnv Management**
 
-A sophisticated Django application for endoscopy data processing and management, built with modern DevOps practices, unified container management, and seamless development/production workflows.
+A sophisticated Django application for endoscopy data processing and management, built with modern DevOps practices, unified container management, and streamlined development/production workflows.
 
 ## 🚀 Quick Start
 
@@ -21,7 +21,6 @@ manage setup                   # Complete environment setup
 ### 2. Development Workflow
 ```bash
 manage dev                     # Switch to development mode
-manage build                   # Build development container (optional)
 devenv up                      # Start Django server
 # Server accessible at http://localhost:8118
 ```
@@ -46,15 +45,15 @@ manage build && manage run     # Build and run production container
 - **Automatic Environment**: Shell loads with all dependencies ready
 - **CUDA Support**: GPU acceleration for ML workloads
 
-### ✅ **Flexible Deployment Options**
+### ✅ **Streamlined Development**
 - **Development**: SQLite + Django dev server
 - **Production**: PostgreSQL + Daphne ASGI server
 - **Containers**: Docker/Podman with DevEnv integration
 
-### ✅ **Luxnix Compatibility**
-- **Central Node Support**: Automatic coordination node configuration
-- **Automatic Detection**: Zero-config deployment on managed systems
-- **Vault Integration**: Secure credential management
+### ✅ **Enterprise Ready**
+- **Luxnix Compatibility**: Automatic coordination node configuration
+- **Comprehensive Validation**: System health monitoring with JSON reports
+- **Professional Organization**: Clean architecture with full documentation
 
 ## 📋 Management Commands
 
@@ -85,19 +84,127 @@ manage clean                   # Clean up containers and images
 manage deploy                  # Full deployment pipeline (production)
 ```
 
-### Example Workflows
+### System Validation
 ```bash
-# Quick development setup
+# Run comprehensive system validation
+bash scripts/core/system-validation.sh
+
+# Generate JSON status report only
+bash scripts/core/system-validation.sh --json-only
+
+# View detailed system status
+cat status-summary.json | jq '.summary'
+```
+
+## 🔍 System Validation
+
+The application includes comprehensive system validation with JSON reporting:
+
+### Validation Features
+- **File Structure**: Validates all required files and directories
+- **Environment**: Tests unified environment management
+- **Database**: Validates connectivity and configuration
+- **CUDA/GPU**: Hardware compatibility testing
+- **Containers**: Automated build and run validation
+- **Legacy Compatibility**: Backwards compatibility verification
+
+### Usage Examples
+```bash
+# Full system validation
+bash scripts/core/system-validation.sh
+
+# JSON-only output for automation
+bash scripts/core/system-validation.sh --json-only
+
+# Parse validation results
+cat status-summary.json | jq '.tests | to_entries[] | select(.value.result == "FAIL")'
+```
+
+### JSON Output Structure
+```json
+{
+  "timestamp": "2025-01-XX",
+  "validation_port": 10123,
+  "summary": {
+    "total_tests": 12,
+    "passed": 10,
+    "warnings": 2,
+    "failed": 0
+  },
+  "tests": {
+    "file_structure": {"result": "PASS", "message": "All required files present"},
+    "container_dev_build": {"result": "PASS", "message": "Dev container builds successfully"},
+    "environment_config": {"result": "PASS", "message": "Environment management working"}
+  },
+  "environment": {
+    "devenv_active": true,
+    "django_settings": "endo_api.settings_prod",
+    "endo_api_mode": "production"
+  }
+}
+```
+
+## 🚀 Common Workflows
+
+### Quick Development Setup
+```bash
+# Complete setup in one command
 manage dev && manage setup && devenv up
+```
 
-# Container development
+### Container Development
+```bash
+# Build and run development container
 manage dev && manage build && manage run
+```
 
-# Production deployment
+### Production Deployment
+```bash
+# Full production deployment
 manage prod && manage deploy
+```
 
-# Production containers
+### Production Containers
+```bash
+# Build and run production containers
 manage prod && manage build && manage run
+```
+
+### System Health Check
+```bash
+# Validate system and generate report
+bash scripts/core/system-validation.sh
+cat status-summary.json | jq '.summary'
+```
+
+## 🔧 DevEnv Commands
+
+### Core DevEnv Integration
+```bash
+# Start services based on current mode
+start-services                 # Mode-aware service startup
+services-up                    # Service management
+services-down                  # Stop all services
+services-logs                  # Follow service logs
+
+# Database operations
+db-shell                       # Connect to database (mode-aware)
+
+# Environment setup
+env-build                      # Build .env file from templates
+env-export                     # Export environment variables
+```
+
+### Script Integration
+```bash
+# Environment configuration (unified)
+set-dev-settings              # Configure development environment
+set-prod-settings             # Configure production environment  
+set-central-settings          # Configure central node environment
+
+# Utility scripts
+gpu-check                     # GPU/CUDA diagnostics
+ensure-psql                   # PostgreSQL availability check
 ```
 
 ## 🏗️ Architecture
@@ -114,6 +221,27 @@ The application operates in two primary modes that automatically configure all c
 | **Static Files** | Served by Django | Collected for nginx |
 | **Dependencies** | Local services available | External services expected |
 
+### Scripts Organization
+```
+scripts/
+├── README.md                   # � Comprehensive usage guide
+├── core/                       # 🎯 Essential operations
+│   ├── environment.py          # Environment configuration
+│   ├── setup.py               # Initial environment setup
+│   └── system-validation.sh   # System validation with JSON output
+├── database/                   # �️ Database utilities
+│   ├── ensure_psql.py          # PostgreSQL setup
+│   ├── fetch_db_pwd_file.py   # Password management
+│   └── make_conf.py           # Configuration generation
+├── utilities/                  # � General utilities
+│   ├── gpu-check.py           # GPU diagnostics
+│   └── test_luxnix_compatibility.py # Compatibility testing
+├── cuda/                      # � CUDA diagnostics
+│   └── [Specialized CUDA tools]
+└── archive/                   # � Legacy/completed scripts
+    └── [Historical implementations]
+```
+
 ### Directory Structure
 ```
 endo-api/
@@ -122,22 +250,21 @@ endo-api/
 ├── manage                      # 🎮 Unified management script
 ├── devenv/                     # 📦 Modular DevEnv components
 ├── container/                  # 🐳 Container infrastructure
+├── scripts/                    # 🔨 Organized utility scripts
 ├── endo_api/                   # 🐍 Django application
-├── scripts/                    # 🔨 Utility scripts
 ├── data/                       # 💾 Application data
-└── staticfiles/                # 📄 Static files
+└── docs/                       # 📚 Documentation and guides
 ```
 
 ### DevEnv Components
 ```
 devenv/
-├── management.nix              # 🎯 Primary management system
-├── scripts.nix                # 🔄 Compatibility layer
+├── management.nix              # 🎯 Unified management system
+├── scripts.nix                # 🔄 Core DevEnv scripts
 ├── containers.nix              # 🐳 Container definitions
 ├── environment.nix             # 🌍 Environment variables
 ├── build_inputs.nix            # 📚 System dependencies
-├── runtime_packages.nix        # 🏃 Runtime packages
-└── vars.nix                    # 📊 Path variables
+└── runtime_packages.nix        # 🏃 Runtime packages
 ```
 
 ### Container Infrastructure
@@ -277,97 +404,105 @@ For luxnix-managed environments, deployment is automatic:
 - **Secrets**: Integrates with luxnix vault system
 - **Central Nodes**: Supports coordination node setup
 
-## 🔍 Troubleshooting
+## 🚨 Troubleshooting
 
 ### Common Issues
 
-**Environment Not Loading**:
+#### Environment Setup Problems
 ```bash
-direnv reload                   # Reload environment
-devenv shell --recreate-lock    # Force rebuild
+# Check environment status
+python scripts/core/environment.py --status
+
+# Reset environment
+python scripts/core/environment.py --clean
+python scripts/core/setup.py
 ```
 
-**Port Conflicts**:
+#### Container Build Failures
 ```bash
-manage status                   # Check current configuration
-# Edit app_config.nix to change port
-direnv reload                   # Apply changes
+# Check container logs
+manage logs
+
+# Clean rebuild
+docker system prune -a
+manage build
 ```
 
-**Container Issues**:
+#### Database Connection Issues
 ```bash
-manage stop                     # Stop all containers
-manage clean                    # Clean up containers/images
-manage build                    # Rebuild containers
+# Check database configuration
+manage db-shell
+bash scripts/database/postgres-check.py
+
+# Reset database
+manage migrate-reset
 ```
 
-**Database Issues**:
+#### CUDA/GPU Problems
 ```bash
-# Development
-rm data/db.sqlite3              # Reset development database
-devenv tasks run db:migrate     # Recreate database
-
-# Production
-manage deploy                   # Run full deployment pipeline
+# Run comprehensive GPU diagnostics
+python scripts/cuda/gpu-check.py
+python test_cuda_detailed.py
 ```
 
-### Logs and Debugging
+#### Service Startup Issues
 ```bash
-# Container logs
-docker logs endo-api-dev-test   # Development container
-docker logs endo-api-prod-test  # Production container
+# Check service status
+services-logs
 
-# Application logs
-tail -f data/logs/*.log         # Application logs
-
-# DevEnv debugging
-devenv info                     # Environment information
+# Restart services
+services-down && services-up
 ```
+
+### Getting Help
+
+1. **Check validation report**: Run `bash scripts/core/system-validation.sh` to get comprehensive system status
+2. **Review logs**: Use `manage logs` or `services-logs` to examine service output
+3. **Verify environment**: Ensure `devenv shell` is active and mode is set correctly
+4. **Check documentation**: Refer to `docs/` for detailed implementation guides
+
+### Performance Optimization
+
+- Use `manage prod` for production workloads
+- Container builds are cached - use `manage build --no-cache` only when needed
+- Database operations are optimized for the configured mode
+- GPU acceleration is automatically detected and used when available
+
+## 📚 Documentation
+
+- **[Centralized Configuration Guide](docs/CENTRALIZED_CONFIG_GUIDE.md)**: Comprehensive configuration management
+- **[DevEnv Testing](docs/devenv-testing.md)**: Testing and validation procedures
+- **[Container Guide](docs/NATIVE_DEVENV_CONTAINERS_GUIDE.md)**: Container integration documentation
+- **[Implementation Reports](docs/implementation-reports/)**: Technical implementation details
 
 ## 🤝 Contributing
 
-### Development Setup
-```bash
-git clone <repository>
-cd endo-api
-manage dev && manage setup      # Setup development environment
-# Make changes...
-# Test changes...
-git commit -m "Your changes"
-```
+1. **Development Setup**:
+   ```bash
+   manage dev
+   python scripts/core/setup.py
+   devenv up
+   ```
 
-### Code Style
-- Follow Django best practices
-- Use type hints where appropriate
-- Maintain the DRY principle
-- Update tests for new features
+2. **Testing Changes**:
+   ```bash
+   bash scripts/core/system-validation.sh
+   python tests/test_*.py
+   ```
 
-## 📚 Additional Resources
+3. **Container Validation**:
+   ```bash
+   manage build
+   manage run
+   ```
 
-### Project Documentation
-- **[Complete Documentation](docs/README.md)** - Comprehensive project documentation index
-- **[Implementation Reports](docs/implementation-reports/)** - Detailed technical reports on system development
-- **[Configuration Guide](docs/CENTRALIZED_CONFIG_GUIDE.md)** - Advanced configuration and customization
-- **[Container Guide](docs/NATIVE_DEVENV_CONTAINERS_GUIDE.md)** - Detailed container usage and deployment
-- **[Container Infrastructure](container/README.md)** - Container files documentation and usage
-
-### External Resources
-- **DevEnv Documentation**: [devenv.sh](https://devenv.sh)
-- **Django Documentation**: [djangoproject.com](https://www.djangoproject.com)
-- **Nix Documentation**: [nixos.org](https://nixos.org)
+4. **Code Standards**: Follow the established patterns in `scripts/core/` for new functionality.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
 
 ---
 
-## 🎯 Project Status
-
-✅ **Production Ready**: Unified management system fully operational  
-✅ **Container Support**: DevEnv native containers working  
-✅ **DRY Optimized**: 87.5% code duplication eliminated  
-✅ **Luxnix Compatible**: Seamless integration with managed environments  
-✅ **Well Tested**: Comprehensive test suite with CI/CD support
-
-**Last Updated**: August 31, 2025
+*Last updated: January 2025*  
+*System Version: DevEnv Unified Management v2.0*

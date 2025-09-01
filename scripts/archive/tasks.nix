@@ -21,7 +21,7 @@
   "env:build" = {
     description = "Build the .env file";
     after = ["env:init-conf"];
-    exec = "uv run env_setup.py";
+    exec = "uv run python scripts/core/setup.py";
   };
 
   # CUDA setup moved to management.nix to avoid duplication

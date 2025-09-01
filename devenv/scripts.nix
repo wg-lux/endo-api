@@ -58,45 +58,10 @@ in
   # Containerized server (always binds to 0.0.0.0)  
   run-server-container.exec = serverStartup true;
 
-} // {
-  # Minimal compatibility layer for deprecated commands
-  # All deprecated commands now redirect to unified management
-  run-dev-server.exec = ''
-    echo "⚠️  DEPRECATED: Use 'manage dev && run-server' or 'devenv up' instead"
-    echo "Redirecting to unified server..."
-    run-server
-  '';
-  
-  run-prod-server.exec = ''  
-    echo "⚠️  DEPRECATED: Use 'manage prod && run-server' or 'devenv up' instead"
-    echo "Redirecting to unified server..."
-    run-server
-  '';
-  
-  run-dev-server-container.exec = ''
-    echo "⚠️  DEPRECATED: Use 'manage dev && manage run' instead"
-    echo "Redirecting to unified container management..."
-    run-server-container
-  '';
-  
-  run-prod-server-container.exec = ''
-    echo "⚠️  DEPRECATED: Use 'manage prod && manage run' instead" 
-    echo "Redirecting to unified container management..."
-    run-server-container
-  '';
-
-  dev-up.exec = ''
-    echo "⚠️  DEPRECATED: Use 'manage dev && devenv up' instead"
-    echo "Redirecting to unified services..."
-    start-services
-  '';
-
-} // {
-
   # Environment and deployment scripts
-  set-prod-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_production_settings.py";
-  set-dev-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_development_settings.py";
-  set-central-settings.exec = "${pkgs.uv}/bin/uv run python scripts/set_central_settings.py";
+  set-prod-settings.exec = "${pkgs.uv}/bin/uv run python scripts/core/environment.py production";
+  set-dev-settings.exec = "${pkgs.uv}/bin/uv run python scripts/core/environment.py development";
+  set-central-settings.exec = "${pkgs.uv}/bin/uv run python scripts/core/environment.py central";
 
   # Container management - redirected to unified management system
   container-dev-up.exec = ''
@@ -109,10 +74,11 @@ in
     manage prod && manage run
   '';
 
+  # Container management
   container-help.exec = ''
     echo "=== Endo API Container Management ==="
     echo ""
-    echo "🏗️  Unified Commands:"
+    echo "🏗️  Modern Commands:"
     echo "  manage build         Build container for current mode"
     echo "  manage run           Run container for current mode"  
     echo "  manage stop          Stop all containers"
@@ -123,22 +89,17 @@ in
     echo "  manage prod          Switch to production mode"
     echo "  manage status        Show current status"
     echo ""
-    echo "� Recommended Workflow:"
-    echo "  1. manage dev              # Set development mode"
-    echo "  2. manage build            # Build dev container" 
-    echo "  3. manage run              # Run dev container"
-    echo ""
+    echo "📋 Recommended Workflow:"
+    echo "  1. manage dev && manage build && manage run"
     echo "  OR for production:"
     echo "  1. manage prod && manage build && manage run"
   '';
 
   container-stop.exec = ''
-    echo "🔄 Redirecting to unified management..."
     manage stop
   '';
 
   container-clean.exec = ''
-    echo "🔄 Redirecting to unified management..."
     manage clean
   '';
 
@@ -167,14 +128,6 @@ in
     fi
   '';
 
-  # Legacy alias (deprecated)
-  dev-up.exec = ''
-    echo "⚠️  DEPRECATED: Use 'start-services' instead. This command will be removed in a future version."
-    echo "   Current mode: $ENDO_API_MODE"
-    echo ""
-    start-services
-  '';
-
   services-down.exec = ''
     echo "Stopping all processes..."
     devenv down
@@ -187,9 +140,8 @@ in
 
 
 
-  # Database management - redirected to unified task system
+  # Database management
   db-shell.exec = ''
-    echo "🔄 Database operations redirected to unified tasks..."
     if [ "$ENDO_API_MODE" = "production" ]; then
       echo "Production mode: Use external database tools"
       echo "Example: psql -h <DB_HOST> -p <DB_PORT> -U <DB_USER> -d <DB_NAME>"
@@ -199,34 +151,9 @@ in
     fi
   '';
 
-  db-backup.exec = ''
-    echo "🔄 Use 'devenv tasks run' for database operations"
-    echo "Database backup should be handled appropriately for your mode:"
-    if [ "$ENDO_API_MODE" = "production" ]; then
-      echo "Production: pg_dump -h <DB_HOST> -p <DB_PORT> -U <DB_USER> <DB_NAME> > backup.sql"
-    else
-      echo "Development: SQLite backup via file copy or .dump command"
-    fi
-  '';
-  
-  db-restore.exec = ''
-    echo "🔄 Use 'devenv tasks run' for database operations"
-    if [ -z "$1" ]; then
-      echo "Usage: db-restore <backup_file>"
-      exit 1
-    fi
-    if [ "$ENDO_API_MODE" = "production" ]; then
-      echo "Production: psql -h <DB_HOST> -p <DB_PORT> -U <DB_USER> -d <DB_NAME> < $1"
-    else
-      echo "Development: Restore not typically needed for SQLite development"
-    fi
-  '';
-
   # Environment setup scripts
   env-pipe.exec = ''
-    # Skip local config generation if local_settings.py exists (luxnix managed)
     if [ ! -f "local_settings.py" ]; then
-      # Use unified management system instead of individual scripts
       echo "Setting up environment using unified management system..."
       manage setup
     else
@@ -242,17 +169,15 @@ in
     deploy-collectstatic
   '';
 
-  gpu-check.exec = "${pkgs.uv}/bin/uv run python scripts/gpu-check.py";
+  gpu-check.exec = "${pkgs.uv}/bin/uv run python scripts/utilities/gpu-check.py";
 
-  # Legacy scripts (deprecated - use setup_project.py instead)
-  ensure-psql.exec = "${pkgs.uv}/bin/uv run python scripts/ensure_psql.py";
-  env-fetch-db-pwd-file.exec = "${pkgs.uv}/bin/uv run python scripts/fetch_db_pwd_file.py";
-  env-init-conf.exec = "${pkgs.uv}/bin/uv run python scripts/make_conf.py";
-  env-build.exec = "${pkgs.uv}/bin/uv run env_setup.py";
+  # Core utility scripts
+  ensure-psql.exec = "${pkgs.uv}/bin/uv run python scripts/database/ensure_psql.py";
+  env-fetch-db-pwd-file.exec = "${pkgs.uv}/bin/uv run python scripts/database/fetch_db_pwd_file.py";
+  env-init-conf.exec = "${pkgs.uv}/bin/uv run python scripts/database/make_conf.py";
+  env-build.exec = "${pkgs.uv}/bin/uv run python scripts/core/setup.py";
   
-  # Unified setup system - all functions moved to management.nix
-  # These scripts were removed during cleanup but functionality preserved in 'manage' command
-  
+  # Django management commands
   env-export.exec = ''
     set -a
     source .env
