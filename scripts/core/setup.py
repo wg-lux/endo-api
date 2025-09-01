@@ -169,7 +169,9 @@ class EnvironmentSetup:
         if not db_pwd_file.exists() or self.force:
             print(f"Creating database password file: {db_pwd_file}")
             try:
-                with open(db_pwd_file, 'w', encoding='utf-8') as f:
+                # Create file with restrictive permissions (owner read/write only)
+                fd = os.open(db_pwd_file, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, mode=0o600)
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
                     f.write(self.default_db_password)
                 print(f"✅ Created '{db_pwd_file}'. IMPORTANT: Change default password for production!")
                 self.status["db_pwd_file"] = True

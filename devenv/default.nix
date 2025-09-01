@@ -10,6 +10,7 @@
   dataDir,
   confDir, 
   confTemplateDir,
+  homeDir,
   uvPackage,
   isDev ? false,
 }:
@@ -19,6 +20,7 @@ let
     dataDir = dataDir;
     confDir = confDir;
     confTemplateDir = confTemplateDir;
+    homeDir = homeDir;
     djangoModuleName = djangoModuleName;
     host = host;
     port = port;
@@ -31,21 +33,23 @@ let
   
   # import modular configurations
   scripts = import ./scripts.nix { 
-    inherit pkgs djangoModuleName host port isDev appConfig; 
+    inherit pkgs lib appConfig djangoModuleName host port isDev; 
   };
   
   services = import ./services.nix { 
-    inherit isDev appConfig; 
+    inherit pkgs lib appConfig isDev; 
   };
   
   # No legacy tasks - functionality moved to management.nix
   tasks = {};
   
   processes = import ./processes.nix { 
-    inherit isDev; 
+    inherit pkgs lib appConfig isDev; 
   };
   
-  containers = import ./containers.nix { appConfig = appConfig; };
+  containers = import ./containers.nix { 
+    inherit pkgs lib appConfig; 
+  };
   
   environment = import ./environment.nix { 
     lxVars = lx_vars;
@@ -53,7 +57,7 @@ let
   };
 
   # Import centralized management system
-  managementSystem = import ./management.nix { inherit pkgs appConfig isDev; };
+  managementSystem = import ./management.nix { inherit pkgs lib appConfig isDev; };
 
 in 
 {

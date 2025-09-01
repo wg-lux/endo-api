@@ -155,7 +155,37 @@ cat status-summary.json | jq '.tests | to_entries[] | select(.value.result == "F
 }
 ```
 
-## 🚀 Common Workflows
+## � Secret Management
+
+**Security-First Approach**: Secrets are never baked into the Nix store or committed to version control.
+
+### Database Passwords
+- **Development**: SQLite requires no password
+- **Production**: Password stored in `conf/db_pwd` (auto-generated during setup)
+- **Containers**: Mount `conf/` directory as volume for secure access
+
+### Environment Variables
+```bash
+# Secrets are read from environment or external files at runtime
+DATABASE_PASSWORD=""              # Always empty in Nix configuration
+DJANGO_SECRET_KEY=""             # Set via .env or environment
+```
+
+### Best Practices
+- All secret files are in `.gitignore` (`.env`, `.secrets`, `conf/`)
+- Use `manage setup` to generate secure default passwords
+- Override defaults with environment variables in production
+- Never hardcode secrets in `app_config.nix` or other Nix files
+
+### Files Excluded from Version Control
+```
+.env*                 # Environment files
+.secrets              # Secret files  
+*.secret              # Any secret files
+conf/                 # Configuration directory (contains db_pwd)
+```
+
+## �🚀 Common Workflows
 
 ### Quick Development Setup
 ```bash

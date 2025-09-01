@@ -1,11 +1,12 @@
 # Scripts configuration for devenv
 { 
   pkgs,
+  lib,
+  appConfig,
   djangoModuleName,
   host,
   port,
-  isDev ? false,
-  appConfig  # Centralized application configuration
+  isDev ? false
 }:
 let
   # Common server startup logic (DRY) - now uses centralized config
@@ -30,7 +31,7 @@ let
         set-prod-settings
       fi
       echo "Starting ${hostText} in Production mode (PostgreSQL)"
-      echo "Host: ${if containerMode then appConfig.server.containerHost else appConfig.server.containerHost}"
+      echo "Host: ${if containerMode then appConfig.server.containerHost else appConfig.server.host}"
       echo "Port: $RUNTIME_PORT"
       echo "Expecting external PostgreSQL and Redis services"
 
@@ -39,7 +40,7 @@ let
       echo "BASE_URL: $BASE_URL"
 
       deploy-pipe
-      ${pkgs.uv}/bin/uv run daphne ${djangoModuleName}.asgi:application -b ${if containerMode then appConfig.server.containerHost else appConfig.server.containerHost} -p $RUNTIME_PORT
+      ${pkgs.uv}/bin/uv run daphne ${djangoModuleName}.asgi:application -b ${if containerMode then appConfig.server.containerHost else "$RUNTIME_HOST"} -p $RUNTIME_PORT
     else
       # Development mode
       set-dev-settings

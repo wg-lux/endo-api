@@ -1,5 +1,5 @@
 # Processes configuration for devenv
-{ isDev ? false }:
+{ pkgs, lib, appConfig, isDev ? false }:
 {
   # Unified Django process that adapts to mode
   django = {

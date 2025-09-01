@@ -14,6 +14,8 @@ let
   dataDir = let env = builtins.getEnv "DATA_DIR"; in if env != "" then env else appConfig.paths.data;
   confDir = let env = builtins.getEnv "CONF_DIR"; in if env != "" then env else appConfig.paths.conf;
   confTemplateDir = let env = builtins.getEnv "CONF_TEMPLATE_DIR"; in if env != "" then env else appConfig.paths.confTemplate;
+  # Use the current user's home directory from environment (devenv-native approach)
+  homeDir = let env = builtins.getEnv "HOME_DIR"; in if env != "" then env else builtins.getEnv "HOME";
   djangoModuleName = let env = builtins.getEnv "DJANGO_MODULE"; in if env != "" then env else appConfig.app.djangoModule;
   http_protocol = let env = builtins.getEnv "HTTP_PROTOCOL"; in if env != "" then env else appConfig.server.protocol;
   host = let env = builtins.getEnv "DJANGO_HOST"; in if env != "" then env else appConfig.server.host;
@@ -42,6 +44,7 @@ let
     dataDir = dataDir;
     confDir = confDir;
     confTemplateDir = confTemplateDir;
+    homeDir = homeDir;
     uvPackage = uvPackage;
     isDev = isDev;
   };

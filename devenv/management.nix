@@ -4,7 +4,7 @@
 # This file consolidates all management tasks, scripts, and container operations
 # into a unified DevEnv-based approach using the centralized configuration.
 
-{ pkgs, appConfig, isDev ? false }:
+{ pkgs, lib, appConfig, isDev ? false }:
 let
   # Utility functions
   containerName = mode: "${appConfig.app.name}-${mode}-test";
@@ -29,9 +29,36 @@ let
         GPU_ARGS="--gpus all"
         echo "🎯 NVIDIA GPU support enabled (Docker)"
       elif command -v podman &> /dev/null; then
-        GPU_ARGS="--device /dev/nvidia0:/dev/nvidia0 --device /dev/nvidiactl:/dev/nvidiactl --device /dev/nvidia-uvm:/dev/nvidia-uvm --device /dev/nvidia-modeset:/dev/nvidia-modeset"
-        GPU_ARGS="$GPU_ARGS -e CUDA_VISIBLE_DEVICES=all -e NVIDIA_VISIBLE_DEVICES=all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility"
-        echo "🎯 NVIDIA GPU support enabled (Podman)"
+        # Check each device file individually and only add if it exists
+        DEVICE_ARGS=""
+        
+        # Check for primary GPU device
+        if [ -c "/dev/nvidia0" ]; then
+          DEVICE_ARGS="$DEVICE_ARGS --device /dev/nvidia0:/dev/nvidia0"
+        fi
+        
+        # Check for NVIDIA control device
+        if [ -c "/dev/nvidiactl" ]; then
+          DEVICE_ARGS="$DEVICE_ARGS --device /dev/nvidiactl:/dev/nvidiactl"
+        fi
+        
+        # Check for NVIDIA Unified Memory device
+        if [ -c "/dev/nvidia-uvm" ]; then
+          DEVICE_ARGS="$DEVICE_ARGS --device /dev/nvidia-uvm:/dev/nvidia-uvm"
+        fi
+        
+        # Check for NVIDIA mode setting device
+        if [ -c "/dev/nvidia-modeset" ]; then
+          DEVICE_ARGS="$DEVICE_ARGS --device /dev/nvidia-modeset:/dev/nvidia-modeset"
+        fi
+        
+        # Always add only device mappings if any device was found
+        if [ ! -z "$DEVICE_ARGS" ]; then
+          GPU_ARGS="$DEVICE_ARGS"
+          echo "🎯 NVIDIA GPU support enabled (Podman) - devices: $DEVICE_ARGS"
+        else
+          echo "⚠️  NVIDIA tools detected but no device files found in /dev/"
+        fi
       else
         echo "⚠️  GPU detected but no container GPU runtime available"
       fi
@@ -128,13 +155,39 @@ else:
         echo "Copying to Docker daemon..."
         devenv container copy "$CONTAINER_NAME"
         
-        # Tag properly
-        IMAGE_ID=$(docker images -q | head -1)
+        # Tag properly - use devenv's container name to find the correct image
+        echo "Finding and tagging container image..."
+        
+        # DevEnv creates images with predictable naming, look for our specific container
+        IMAGE_ID=$(docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}" | grep "$CONTAINER_NAME" | head -1 | awk '{print $3}')
+        
+        # Fallback: if devenv naming doesn't match, look for the most recent image without a name
+        if [ -z "$IMAGE_ID" ]; then
+          echo "Primary lookup failed, trying fallback method..."
+          IMAGE_ID=$(docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}" | grep "^<none>" | head -1 | awk '{print $3}')
+        fi
+        
+        # Final fallback: get the most recently created image (dangerous but better than failing)
+        if [ -z "$IMAGE_ID" ]; then
+          echo "⚠️  Fallback: Using most recent image (may be incorrect)"
+          IMAGE_ID=$(docker images -q --format "table {{.CreatedAt}}\t{{.ID}}" | sort -r | head -1 | awk '{print $2}')
+        fi
+        
         if [ ! -z "$IMAGE_ID" ]; then
+          echo "Found image ID: $IMAGE_ID"
           docker tag "$IMAGE_ID" "$CONTAINER_NAME:latest"
           echo "✅ Container ready: $CONTAINER_NAME:latest"
+          
+          # Verify the tag worked
+          if docker images "$CONTAINER_NAME:latest" | grep -q "$CONTAINER_NAME"; then
+            echo "✅ Tag verification successful"
+          else
+            echo "⚠️  Tag verification failed, but continuing..."
+          fi
         else
           echo "❌ Failed to find container image"
+          echo "Available images:"
+          docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}"
           exit 1
         fi
       '';
@@ -152,9 +205,37 @@ else:
         # GPU support detection
         ${gpuArgs}
         
-        # Stop existing container
-        docker stop "$INSTANCE_NAME" 2>/dev/null || true
-        docker rm "$INSTANCE_NAME" 2>/dev/null || true
+        # Stop existing container with improved error handling
+        echo "Stopping existing container if running..."
+        if docker ps -q -f name="$INSTANCE_NAME" | grep -q .; then
+          echo "Found running container: $INSTANCE_NAME"
+          if docker stop "$INSTANCE_NAME" 2>/dev/null; then
+            echo "✅ Successfully stopped $INSTANCE_NAME"
+          else
+            echo "⚠️  Failed to stop $INSTANCE_NAME, attempting force kill..."
+            docker kill "$INSTANCE_NAME" 2>/dev/null || echo "⚠️  Force kill also failed, continuing anyway..."
+          fi
+        else
+          echo "No running container named $INSTANCE_NAME found"
+        fi
+        
+        # Remove existing container with improved error handling
+        echo "Removing existing container if present..."
+        if docker ps -aq -f name="$INSTANCE_NAME" | grep -q .; then
+          echo "Found existing container: $INSTANCE_NAME"
+          if docker rm "$INSTANCE_NAME" 2>/dev/null; then
+            echo "✅ Successfully removed $INSTANCE_NAME"
+          else
+            echo "⚠️  Failed to remove $INSTANCE_NAME, attempting force removal..."
+            if docker rm -f "$INSTANCE_NAME" 2>/dev/null; then
+              echo "✅ Force removal successful"
+            else
+              echo "❌ Force removal failed, but continuing with new container creation..."
+            fi
+          fi
+        else
+          echo "No existing container named $INSTANCE_NAME found"
+        fi
         
         # Run new container
         echo "Starting container: $INSTANCE_NAME"
@@ -177,10 +258,22 @@ else:
         for mode in dev prod; do
           INSTANCE_NAME="${appConfig.app.name}-$mode-test"
           if docker ps -q -f name="$INSTANCE_NAME" | grep -q .; then
-            docker stop "$INSTANCE_NAME"
-            echo "✅ Stopped $INSTANCE_NAME"
+            echo "Stopping $INSTANCE_NAME..."
+            if docker stop "$INSTANCE_NAME" 2>/dev/null; then
+              echo "✅ Successfully stopped $INSTANCE_NAME"
+            else
+              echo "⚠️  Normal stop failed for $INSTANCE_NAME, trying force kill..."
+              if docker kill "$INSTANCE_NAME" 2>/dev/null; then
+                echo "✅ Force killed $INSTANCE_NAME"
+              else
+                echo "❌ Failed to stop $INSTANCE_NAME (may already be stopped)"
+              fi
+            fi
+          else
+            echo "No running container named $INSTANCE_NAME found"
           fi
         done
+        echo "✅ Stop operation completed"
       '';
     };
 
@@ -191,11 +284,29 @@ else:
         for mode in dev prod; do
           INSTANCE_NAME="${appConfig.app.name}-$mode-test"
           if docker ps -aq -f name="$INSTANCE_NAME" | grep -q .; then
-            docker stop "$INSTANCE_NAME" 2>/dev/null || true
-            docker rm "$INSTANCE_NAME"
-            echo "✅ Removed $INSTANCE_NAME"
+            echo "Removing $INSTANCE_NAME..."
+            # First try to stop if running
+            if docker ps -q -f name="$INSTANCE_NAME" | grep -q .; then
+              echo "Container is running, stopping first..."
+              docker stop "$INSTANCE_NAME" 2>/dev/null || docker kill "$INSTANCE_NAME" 2>/dev/null || true
+            fi
+            
+            # Now remove the container
+            if docker rm "$INSTANCE_NAME" 2>/dev/null; then
+              echo "✅ Successfully removed $INSTANCE_NAME"
+            else
+              echo "⚠️  Normal removal failed for $INSTANCE_NAME, trying force removal..."
+              if docker rm -f "$INSTANCE_NAME" 2>/dev/null; then
+                echo "✅ Force removed $INSTANCE_NAME"
+              else
+                echo "❌ Failed to remove $INSTANCE_NAME (may not exist)"
+              fi
+            fi
+          else
+            echo "No container named $INSTANCE_NAME found"
           fi
         done
+        echo "✅ Remove operation completed"
       '';
     };
 

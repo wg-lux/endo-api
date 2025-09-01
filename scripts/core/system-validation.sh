@@ -63,7 +63,7 @@ log_error() {
 
 log_header() {
     echo -e "\n${PURPLE}$1${NC}"
-    echo "$(printf '%*s' ${#1} | tr ' ' '=')"
+    echo "$(printf '%*s' "${#1}" "" | tr ' ' '=')"
 }
 
 # JSON result recording
@@ -224,24 +224,26 @@ test_environment_configuration() {
     
     # Test unified environment script
     log_info "🔍 Testing unified environment management..."
-    if python3 scripts/core/environment.py show >/dev/null 2>&1; then
+    local cmd_output
+    if cmd_output="$(python3 scripts/core/environment.py show 2>&1)" && [ $? -eq 0 ]; then
         log_success "Unified environment management functional"
         local env_result="PASS"
         local env_message="Environment management working"
     else
-        log_error "Unified environment management failed"
+        log_error "Unified environment management failed: $cmd_output"
         local env_result="FAIL"
         local env_message="Environment management not working"
     fi
     
     # Test setup script
     log_info "🔍 Testing environment setup script..."
-    if python3 scripts/core/setup.py --status-only >/dev/null 2>&1; then
+    local setup_output
+    if setup_output="$(python3 scripts/core/setup.py --status-only 2>&1)" && [ $? -eq 0 ]; then
         log_success "Environment setup script functional"
         local setup_result="PASS"
         local setup_message="Setup script working"
     else
-        log_warning "Environment setup script had issues"
+        log_warning "Environment setup script had issues: $setup_output"
         local setup_result="WARNING"
         local setup_message="Setup script issues detected"
     fi
@@ -299,6 +301,34 @@ test_containers() {
     local force_rebuild="${1:-false}"
     local verbose="${2:-false}"
     log_header "🐳 Container Build and Run Tests"
+    
+    # Docker availability check
+    docker_available() {
+        log_info "🔍 Checking Docker availability..."
+        if ! command -v docker >/dev/null 2>&1; then
+            log_warning "Docker command not found in PATH"
+            return 1
+        fi
+        
+        # Test if Docker daemon is responding
+        if ! timeout 10 docker info >/dev/null 2>&1; then
+            log_warning "Docker daemon not responding or not accessible"
+            return 1
+        fi
+        
+        log_success "Docker is available and responding"
+        return 0
+    }
+    
+    # Early Docker availability check
+    if ! docker_available; then
+        log_warning "Skipping container tests: Docker unavailable"
+        record_result "container_dev_build" "SKIP" "Docker not available"
+        record_result "container_dev_run" "SKIP" "Docker not available"
+        record_result "container_prod_build" "SKIP" "Docker not available"
+        record_result "container_prod_run" "SKIP" "Docker not available"
+        return 0
+    fi
     
     local dev_image="endo-api-dev-test:validation"
     local prod_image="endo-api-prod-test:validation"

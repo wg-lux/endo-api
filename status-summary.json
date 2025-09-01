@@ -1,11 +1,11 @@
 {
-  "timestamp": "2025-09-01T11:50:18+02:00",
+  "timestamp": "2025-09-01T12:28:43+02:00",
   "validation_port": 10123,
   "project_root": "/home/admin/dev/endo-api",
   "summary": {
     "total_tests": 16,
-    "passed": 12,
-    "warnings": 1,
+    "passed": 11,
+    "warnings": 2,
     "failed": 1,
     "skipped": 2
   },
@@ -47,8 +47,8 @@
       "message": "Shebang execution successful"
     },
     "cuda_gpu": {
-      "result": "PASS",
-      "message": "GPU/CUDA available and working"
+      "result": "WARNING",
+      "message": "GPU/CUDA not available or has issues"
     },
     "container_prod_build": {
       "result": "FAIL",

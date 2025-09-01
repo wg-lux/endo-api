@@ -1,5 +1,5 @@
 # Services configuration for devenv
-{ isDev ? false, appConfig }:
+{ pkgs, lib, appConfig, isDev ? false }:
 {
   # In prod mode: expect external services, no local services
   postgres = if isDev then {

@@ -2,6 +2,7 @@
   dataDir,
   confDir,
   confTemplateDir,
+  homeDir,
   djangoModuleName,
   host,
   port,
@@ -21,7 +22,7 @@ let
   lxAnonymizerDir = "${libDir}/lx-anonymizer";
   endoregDbDir = "${libDir}/endoreg-db";
   # Use current working directory's parent as a more reliable home reference
-  homeDir = "/home/admin";  # TODO: Make this configurable via app_config.nix
+  # homeDir = "/home/admin";  # TODO: Make this configurable via app_config.nix
 
   lx_vars = {
     DJANGO_MODULE = djangoModuleName;

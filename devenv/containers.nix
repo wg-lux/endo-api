@@ -1,5 +1,5 @@
 # Container configuration for devenv
-{ appConfig }:
+{ pkgs, lib, appConfig }:
 {
   "${appConfig.containers.devImage}" = {
     name = appConfig.containers.devImage;
