@@ -92,6 +92,15 @@ bash scripts/core/system-validation.sh
 # Generate JSON status report only
 bash scripts/core/system-validation.sh --json-only
 
+# Fast validation (skip slow container builds)
+bash scripts/core/system-validation.sh --skip-containers
+
+# Force rebuild containers (for fresh validation)
+bash scripts/core/system-validation.sh --force-rebuild
+
+# Verbose mode (show full build output)
+bash scripts/core/system-validation.sh --verbose
+
 # View detailed system status
 cat status-summary.json | jq '.summary'
 ```
@@ -105,8 +114,10 @@ The application includes comprehensive system validation with JSON reporting:
 - **Environment**: Tests unified environment management
 - **Database**: Validates connectivity and configuration
 - **CUDA/GPU**: Hardware compatibility testing
-- **Containers**: Automated build and run validation
+- **Containers**: Automated build and run validation with smart caching
 - **Legacy Compatibility**: Backwards compatibility verification
+
+**Container Optimization**: Uses cached validation containers (`endo-api-dev-test:validation`, `endo-api-prod-test:validation`) to speed up repeated validations. Only rebuilds when containers don't exist or `--force-rebuild` is specified.
 
 ### Usage Examples
 ```bash

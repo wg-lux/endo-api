@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
-"""
-System Validation and Status Summary for Endo API
-=================================================
-
-Comprehensive system validation that checks:
-- File structure and dependencies
-- Configuration validity
-- Development environment functionality  
-- Container build and run capabilities (on test port 10123)
-- Database connectivity
-- GPU/CUDA availability
-
-Outputs structured JSON status summary to status-summary.json
-
-Usage:
-    bash scripts/core/system-validation.sh
-    bash scripts/core/system-validation.sh --json-only
-"""
+# system-validation.sh - Comprehensive system validation with JSON output
+# 
+# System Validation and Status Summary for Endo API
+# =================================================
+# 
+# Comprehensive system validation that checks:
+# - File structure and dependencies
+# - Configuration validity
+# - Development environment functionality  
+# - Container build and run capabilities (on test port 10123)
+# - Database connectivity
+# - GPU/CUDA availability
+# 
+# Outputs structured JSON status summary to status-summary.json
+# 
+# Usage:
+#     bash scripts/core/system-validation.sh
+#     bash scripts/core/system-validation.sh --json-only
+#     bash scripts/core/system-validation.sh --skip-containers
+#     bash scripts/core/system-validation.sh --force-rebuild
+#     bash scripts/core/system-validation.sh --verbose
 
 set -e
 
@@ -124,6 +127,7 @@ test_environment_configuration() {
     log_header "🔧 Environment Configuration"
     
     # Test unified environment script
+    log_info "🔍 Testing unified environment management..."
     if python3 scripts/core/environment.py show >/dev/null 2>&1; then
         log_success "Unified environment management functional"
         local env_result="PASS"
@@ -135,6 +139,7 @@ test_environment_configuration() {
     fi
     
     # Test setup script
+    log_info "🔍 Testing environment setup script..."
     if python3 scripts/core/setup.py --status-only >/dev/null 2>&1; then
         log_success "Environment setup script functional"
         local setup_result="PASS"
@@ -174,6 +179,7 @@ test_database_connectivity() {
 test_cuda_availability() {
     log_header "🚀 CUDA/GPU Diagnostics"
     
+    log_info "🔍 Testing GPU/CUDA availability..."
     if python3 scripts/utilities/gpu-check.py >/dev/null 2>&1; then
         log_success "GPU/CUDA diagnostics passed"
         record_result "cuda_gpu" "PASS" "GPU/CUDA available and working"
@@ -183,6 +189,7 @@ test_cuda_availability() {
     fi
     
     # Run detailed CUDA test
+    log_info "🔍 Running detailed CUDA tests..."
     if python3 scripts/cuda/test_cuda_detailed.py >/dev/null 2>&1; then
         log_success "Detailed CUDA tests passed"
         record_result "cuda_detailed" "PASS" "Detailed CUDA tests successful"
@@ -193,23 +200,98 @@ test_cuda_availability() {
 }
 
 test_containers() {
+    local force_rebuild="${1:-false}"
+    local verbose="${2:-false}"
     log_header "🐳 Container Build and Run Tests"
     
+    local dev_image="endo-api-dev-test:validation"
+    local prod_image="endo-api-prod-test:validation"
+    
+    # Helper function to check if image exists
+    image_exists() {
+        docker image inspect "$1" >/dev/null 2>&1
+    }
+    
+    # Helper function to show build progress
+    show_build_progress() {
+        local container_type="$1"
+        local pid="$2"
+        local count=0
+        
+        while kill -0 "$pid" 2>/dev/null; do
+            local dots=$(printf "%*s" $((count % 4)) | tr ' ' '.')
+            printf "\r${BLUE}ℹ️  Building $container_type container$dots (${count}s)${NC}"
+            sleep 1
+            ((count++))
+            
+            # Show milestone messages
+            case $count in
+                30) echo -e "\n${YELLOW}⏳ Still building... Downloading Nix packages${NC}" ;;
+                120) echo -e "\n${YELLOW}⏳ Still building... Installing DevEnv${NC}" ;;
+                300) echo -e "\n${YELLOW}⏳ Still building... Setting up Python environment${NC}" ;;
+                600) echo -e "\n${YELLOW}⏳ Still building... This can take up to an hour for first build${NC}" ;;
+                1800) echo -e "\n${YELLOW}⏳ Still building... DevEnv builds can be slow but are cached${NC}" ;;
+            esac
+        done
+        printf "\r%*s\r" 50 ""  # Clear the progress line
+    }
+    
+    # Helper function to build container with smart caching and progress
+    build_container() {
+        local dockerfile="$1"
+        local image_tag="$2"
+        local container_type="$3"
+        
+        if [ "$force_rebuild" = "true" ] || ! image_exists "$image_tag"; then
+            if [ "$force_rebuild" = "true" ]; then
+                log_info "Force rebuilding $container_type container..."
+            else
+                log_info "Building $container_type container (not found)..."
+            fi
+            
+            if [ "$verbose" = "true" ]; then
+                # Verbose mode: show full build output
+                log_info "🔍 Verbose mode: showing build output..."
+                if cd "$PROJECT_ROOT" && timeout 3600 docker build -f "$dockerfile" -t "$image_tag" .; then
+                    return 0
+                else
+                    return $?
+                fi
+            else
+                # Normal mode: show progress indicator
+                cd "$PROJECT_ROOT"
+                (timeout 3600 docker build -f "$dockerfile" -t "$image_tag" . >/dev/null 2>&1) &
+                local build_pid=$!
+                
+                show_build_progress "$container_type" "$build_pid"
+                
+                # Wait for build to complete and get exit status
+                wait "$build_pid"
+                return $?
+            fi
+        else
+            log_info "Using existing $container_type container image ($image_tag)"
+            return 0
+        fi
+    }
+    
     # Test development container
-    log_info "Testing development container build..."
-    if cd "$PROJECT_ROOT" && docker build -f container/Dockerfile.dev -t endo-api-dev-test:latest . >/dev/null 2>&1; then
-        log_success "Development container build successful"
+    log_info "🔍 Checking development container..."
+    local start_time=$(date +%s)
+    
+    if build_container "container/Dockerfile.dev" "$dev_image" "development"; then
+        local build_time=$(($(date +%s) - start_time))
+        log_success "Development container ready (${build_time}s)"
         local dev_build="PASS"
-        local dev_build_msg="Dev container builds successfully"
+        local dev_build_msg="Dev container available"
         
         # Test development container run
-        log_info "Testing development container run on port $VALIDATION_PORT..."
+        log_info "🚀 Testing development container run on port $VALIDATION_PORT..."
         local container_id
-        if container_id=$(docker run -d -p "$VALIDATION_PORT:8000" endo-api-dev-test:latest) && sleep 5; then
+        if container_id=$(timeout 30 docker run -d -p "$VALIDATION_PORT:8000" "$dev_image") && sleep 5; then
             # Test if container is responsive
-            if curl -s "http://localhost:$VALIDATION_PORT" >/dev/null 2>&1 || [ $? -eq 7 ]; then
-                # Exit code 7 means connection refused, which is expected if Django isn't fully started
-                # The important thing is that the port is bound and container is running
+            log_info "🔍 Testing container responsiveness..."
+            if timeout 10 curl -s "http://localhost:$VALIDATION_PORT" >/dev/null 2>&1 || [ $? -eq 7 ]; then
                 log_success "Development container runs successfully"
                 local dev_run="PASS"
                 local dev_run_msg="Dev container runs and binds port"
@@ -220,6 +302,7 @@ test_containers() {
             fi
             
             # Clean up
+            log_info "🧹 Cleaning up development container..."
             docker stop "$container_id" >/dev/null 2>&1
             docker rm "$container_id" >/dev/null 2>&1
         else
@@ -227,29 +310,37 @@ test_containers() {
             local dev_run="FAIL"
             local dev_run_msg="Dev container failed to start"
         fi
-        
-        # Clean up build
-        docker rmi endo-api-dev-test:latest >/dev/null 2>&1
     else
-        log_error "Development container build failed"
-        local dev_build="FAIL"
-        local dev_build_msg="Dev container build failed"
+        local build_time=$(($(date +%s) - start_time))
+        if [ $? -eq 124 ]; then
+            log_warning "Development container build timed out (${build_time}s)"
+            local dev_build="WARNING"
+            local dev_build_msg="Dev container build timed out"
+        else
+            log_error "Development container build failed (${build_time}s)"
+            local dev_build="FAIL"
+            local dev_build_msg="Dev container build failed"
+        fi
         local dev_run="SKIP"
         local dev_run_msg="Skipped due to build failure"
     fi
     
     # Test production container
-    log_info "Testing production container build..."
-    if cd "$PROJECT_ROOT" && docker build -f container/Dockerfile.prod -t endo-api-prod-test:latest . >/dev/null 2>&1; then
-        log_success "Production container build successful"
+    log_info "🔍 Checking production container..."
+    local start_time=$(date +%s)
+    
+    if build_container "container/Dockerfile.prod" "$prod_image" "production"; then
+        local build_time=$(($(date +%s) - start_time))
+        log_success "Production container ready (${build_time}s)"
         local prod_build="PASS"
-        local prod_build_msg="Prod container builds successfully"
+        local prod_build_msg="Prod container available"
         
         # Test production container run
-        log_info "Testing production container run on port $((VALIDATION_PORT + 1))..."
+        log_info "🚀 Testing production container run on port $((VALIDATION_PORT + 1))..."
         local container_id
-        if container_id=$(docker run -d -p "$((VALIDATION_PORT + 1)):8000" endo-api-prod-test:latest) && sleep 5; then
-            if curl -s "http://localhost:$((VALIDATION_PORT + 1))" >/dev/null 2>&1 || [ $? -eq 7 ]; then
+        if container_id=$(timeout 30 docker run -d -p "$((VALIDATION_PORT + 1)):8000" "$prod_image") && sleep 5; then
+            log_info "🔍 Testing container responsiveness..."
+            if timeout 10 curl -s "http://localhost:$((VALIDATION_PORT + 1))" >/dev/null 2>&1 || [ $? -eq 7 ]; then
                 log_success "Production container runs successfully"
                 local prod_run="PASS"
                 local prod_run_msg="Prod container runs and binds port"
@@ -260,6 +351,7 @@ test_containers() {
             fi
             
             # Clean up
+            log_info "🧹 Cleaning up production container..."
             docker stop "$container_id" >/dev/null 2>&1
             docker rm "$container_id" >/dev/null 2>&1
         else
@@ -267,13 +359,17 @@ test_containers() {
             local prod_run="FAIL"
             local prod_run_msg="Prod container failed to start"
         fi
-        
-        # Clean up build
-        docker rmi endo-api-prod-test:latest >/dev/null 2>&1
     else
-        log_error "Production container build failed"
-        local prod_build="FAIL"
-        local prod_build_msg="Prod container build failed"
+        local build_time=$(($(date +%s) - start_time))
+        if [ $? -eq 124 ]; then
+            log_warning "Production container build timed out (${build_time}s)"
+            local prod_build="WARNING" 
+            local prod_build_msg="Prod container build timed out"
+        else
+            log_error "Production container build failed (${build_time}s)"
+            local prod_build="FAIL"
+            local prod_build_msg="Prod container build failed"
+        fi
         local prod_run="SKIP"
         local prod_run_msg="Skipped due to build failure"
     fi
@@ -288,20 +384,10 @@ test_containers() {
 }
 
 test_legacy_compatibility() {
-    log_header "🔄 Legacy Compatibility"
+    log_header "🔄 Legacy Compatibility" 
     
-    if [ -f "tests/legacy/test-containers.sh" ]; then
-        if ./tests/legacy/test-containers.sh --ci >/dev/null 2>&1; then
-            log_success "Legacy container tests passed"
-            record_result "legacy_containers" "PASS" "Legacy container tests successful"
-        else
-            log_warning "Legacy container tests had issues"
-            record_result "legacy_containers" "WARNING" "Legacy container tests failed"
-        fi
-    else
-        log_warning "Legacy container tests not found"
-        record_result "legacy_containers" "SKIP" "Test file not found"
-    fi
+    log_info "🧹 Legacy container tests are deprecated - using modern DevEnv container validation"
+    record_result "legacy_containers" "SKIP" "Legacy tests replaced by modern container validation"
 }
 
 generate_json_summary() {
@@ -431,6 +517,9 @@ show_summary() {
 # Main execution
 main() {
     local json_only=false
+    local skip_containers=false
+    local force_rebuild=false
+    local verbose=false
     
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -439,8 +528,20 @@ main() {
                 json_only=true
                 shift
                 ;;
+            --skip-containers)
+                skip_containers=true
+                shift
+                ;;
+            --force-rebuild)
+                force_rebuild=true
+                shift
+                ;;
+            --verbose)
+                verbose=true
+                shift
+                ;;
             *)
-                echo "Usage: $0 [--json-only]"
+                echo "Usage: $0 [--json-only] [--skip-containers] [--force-rebuild] [--verbose]"
                 exit 1
                 ;;
         esac
@@ -461,7 +562,17 @@ main() {
     test_environment_configuration || true  
     test_database_connectivity || true
     test_cuda_availability || true
-    test_containers || true
+    
+    if [ "$skip_containers" = false ]; then
+        test_containers "$force_rebuild" "$verbose" || true
+    else
+        log_info "⏭️  Skipping container tests (--skip-containers flag)"
+        record_result "container_dev_build" "SKIP" "Container tests skipped by user"
+        record_result "container_dev_run" "SKIP" "Container tests skipped by user"
+        record_result "container_prod_build" "SKIP" "Container tests skipped by user"
+        record_result "container_prod_run" "SKIP" "Container tests skipped by user"
+    fi
+    
     test_legacy_compatibility || true
     
     # Generate outputs

@@ -1,0 +1,12 @@
+{
+  "timestamp": "2025-09-01T09:59:48+02:00",
+  "validation_port": 10123,
+  "project_root": "/home/admin/dev/endo-api",
+  "summary": {
+    "total_tests": 0,
+    "passed": 0,
+    "warnings": 0,
+    "failed": 0,
+    "skipped": 0
+  },
+  "tests": {

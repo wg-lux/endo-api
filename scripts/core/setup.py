@@ -27,8 +27,9 @@ from django.core.management.utils import get_random_secret_key
 class EnvironmentSetup:
     """Handles environment initialization and setup"""
     
-    def __init__(self, force: bool = False):
+    def __init__(self, force: bool = False, status_only: bool = False):
         self.force = force
+        self.status_only = status_only
         self.default_db_password = "changeme_in_production"
         self.status = {
             "config_dir": False,
@@ -37,9 +38,45 @@ class EnvironmentSetup:
             "secrets_generated": False
         }
         
-        # Load environment variables
-        self.nix_vars = self._load_nix_variables()
-        self.nix_paths = self._process_paths()
+        # Load environment variables only if not status-only mode
+        if not status_only:
+            self.nix_vars = self._load_nix_variables()
+            self.nix_paths = self._process_paths()
+        else:
+            self.nix_vars = {}
+            self.nix_paths = {}
+            # For status-only mode, check basic files that don't need Nix vars
+            self._check_basic_status()
+    
+    def _check_basic_status(self):
+        """Check basic status without requiring Nix environment variables"""
+        # Check if basic files exist
+        if Path(".env").exists():
+            self.status["env_file"] = True
+            
+        # Check if conf directory exists (using common paths)
+        conf_paths = [Path("conf"), Path("./conf")]
+        for conf_path in conf_paths:
+            if conf_path.exists():
+                self.status["config_dir"] = True
+                break
+                
+        # Check if db password file exists (using common paths) 
+        db_pwd_paths = [Path("conf/db_pwd"), Path("./conf/db_pwd")]
+        for db_pwd_path in db_pwd_paths:
+            if db_pwd_path.exists():
+                self.status["db_pwd_file"] = True
+                break
+                
+        # Check if .env has secrets (basic check)
+        if Path(".env").exists():
+            try:
+                with open(".env", "r") as f:
+                    content = f.read()
+                    if "DJANGO_SECRET_KEY" in content and "DJANGO_SALT" in content:
+                        self.status["secrets_generated"] = True
+            except Exception:
+                pass
     
     def _load_nix_variables(self) -> Dict[str, str]:
         """Load required environment variables"""
@@ -102,6 +139,9 @@ class EnvironmentSetup:
     
     def setup_configuration_directory(self) -> bool:
         """Ensure configuration directory exists"""
+        if self.status_only or not self.nix_paths:
+            return False
+            
         conf_dir = self.nix_paths["CONF_DIR"]
         
         print(f"📁 Checking configuration directory: {conf_dir}")
@@ -117,6 +157,9 @@ class EnvironmentSetup:
     
     def setup_database_password_file(self) -> bool:
         """Create database password file if missing"""
+        if self.status_only or not self.nix_paths:
+            return False
+            
         db_pwd_file = self.nix_paths["DB_PWD_FILE"]
         
         print(f"🔐 Checking database password file: {db_pwd_file}")
@@ -138,6 +181,9 @@ class EnvironmentSetup:
     
     def setup_env_file(self) -> bool:
         """Create and configure .env file"""
+        if self.status_only or not self.nix_paths:
+            return False
+            
         env_template = self.nix_paths.get("CONF_TEMPLATE_DIR", Path("./conf_template")) / "default.env"
         env_target = Path(".env")
         
@@ -247,6 +293,10 @@ class EnvironmentSetup:
     
     def run_setup(self) -> Dict[str, bool]:
         """Run complete environment setup"""
+        if self.status_only:
+            print("🔍 Status-only mode: skipping setup operations")
+            return self.status
+            
         print("🚀 Starting Endo API Environment Setup")
         print("=" * 40)
         
@@ -302,7 +352,7 @@ def main():
     args = parser.parse_args()
     
     try:
-        setup = EnvironmentSetup(force=args.force)
+        setup = EnvironmentSetup(force=args.force, status_only=args.status_only)
         
         if args.status_only:
             # Just check and show status without making changes
