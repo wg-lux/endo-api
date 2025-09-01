@@ -1,12 +1,85 @@
 {
-  "timestamp": "2025-09-01T10:11:27+02:00",
+  "timestamp": "2025-09-01T11:50:18+02:00",
   "validation_port": 10123,
   "project_root": "/home/admin/dev/endo-api",
   "summary": {
-    "total_tests": 0,
-    "passed": 0,
-    "warnings": 0,
-    "failed": 0,
-    "skipped": 0
+    "total_tests": 16,
+    "passed": 12,
+    "warnings": 1,
+    "failed": 1,
+    "skipped": 2
   },
   "tests": {
+    "cuda_detailed": {
+      "result": "PASS",
+      "message": "Detailed CUDA tests successful"
+    },
+    "date_iso": {
+      "result": "PASS",
+      "message": "ISO date format supported"
+    },
+    "container_dev_build": {
+      "result": "PASS",
+      "message": "Dev container available"
+    },
+    "container_prod_run": {
+      "result": "SKIP",
+      "message": "Skipped due to build failure"
+    },
+    "database": {
+      "result": "PASS",
+      "message": "Database connectivity working"
+    },
+    "file_structure": {
+      "result": "PASS",
+      "message": "All required files present"
+    },
+    "container_dev_run": {
+      "result": "WARNING",
+      "message": "Dev container runs but response unclear"
+    },
+    "setup_script": {
+      "result": "PASS",
+      "message": "Setup script working"
+    },
+    "shebang_compatibility": {
+      "result": "PASS",
+      "message": "Shebang execution successful"
+    },
+    "cuda_gpu": {
+      "result": "PASS",
+      "message": "GPU/CUDA available and working"
+    },
+    "container_prod_build": {
+      "result": "FAIL",
+      "message": "Prod container build failed"
+    },
+    "environment_config": {
+      "result": "PASS",
+      "message": "Environment management working"
+    },
+    "system_commands": {
+      "result": "PASS",
+      "message": "All required commands available"
+    },
+    "bash_arrays": {
+      "result": "PASS",
+      "message": "Associative arrays work"
+    },
+    "legacy_containers": {
+      "result": "SKIP",
+      "message": "Legacy tests replaced by modern container validation"
+    },
+    "bash_version": {
+      "result": "PASS",
+      "message": "bash 5.3 compatible"
+    }
+  },
+  "environment": {
+    "devenv_active": impure,
+    "django_settings": "endo_api.settings_dev",
+    "endo_api_mode": "development",
+    "python_path": "/home/admin/dev/endo-api/.devenv/state/venv/bin/python3",
+    "docker_available": true
+  }
+}

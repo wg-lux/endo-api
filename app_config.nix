@@ -7,7 +7,7 @@
 # To change the port, Django module name, or host, simply update the values
 # in this file and rebuild the environment.
 
-{
+rec {
   # Core Application Identity
   app = {
     name = "endo-api";
@@ -82,17 +82,17 @@
     };
   };
 
-  # Container Configuration
+    # Container Configuration
   containers = {
-    # Docker image names (derived from app.name)
-    devImage = "endo-api-dev";
-    prodImage = "endo-api-prod";
+    # Development container - uses devenv with all development tools
+    devImage = "${app.name}-dev";
     
-    # Container resource limits (can be overridden in docker-compose)
-    resources = {
-      memory = "2g";
-      cpus = "2.0";
-    };
+    # Production container - optimized runtime with minimal dependencies
+    prodImage = "${app.name}-prod";
+    
+    # Container registry settings (uncomment when using external registry)
+    # registry = "your-registry.com";
+    # namespace = "your-namespace";
   };
 
   # Service Dependencies

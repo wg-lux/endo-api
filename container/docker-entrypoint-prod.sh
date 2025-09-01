@@ -42,5 +42,17 @@ echo "    ✅ Database migrations applied"
 echo "    ✅ Production optimizations active"
 echo ""
 
-# Start Django production server (can be replaced with gunicorn/daphne based on needs)
-exec devenv shell -- python manage.py runserver ${DJANGO_HOST:-0.0.0.0}:${DJANGO_PORT:-8118} --noreload
+# Production server selection - prefer Daphne (ASGI) for production
+HOST="${DJANGO_HOST:-0.0.0.0}"
+PORT="${DJANGO_PORT:-8118}"
+WORKERS="${WORKERS:-4}"
+
+# Check if Daphne is available (production ASGI server)
+if devenv shell -- which daphne > /dev/null 2>&1; then
+    echo "🚀 Using Daphne ASGI server (production-ready)"
+    exec devenv shell -- daphne -b "$HOST" -p "$PORT" "${DJANGO_MODULE:-endo_api}.asgi:application"
+# Fallback to Django development server if Daphne unavailable
+else
+    echo "⚠️ Daphne not found, falling back to Django runserver"
+    exec devenv shell -- python manage.py runserver "$HOST:$PORT" --noreload
+fi

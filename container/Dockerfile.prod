@@ -12,7 +12,8 @@ RUN echo "experimental-features = nix-command flakes" >> /etc/nix/nix.conf \
 RUN nix-channel --add https://github.com/NixOS/nixpkgs/archive/nixos-unstable.tar.gz nixpkgs \
     && nix-channel --update \
     && nix profile install --accept-flake-config github:cachix/devenv/latest \
-    && nix profile install nixpkgs#git nixpkgs#cachix \
+    && (nix profile install nixpkgs#git --priority 4 || echo "Git already installed or installation skipped") \
+    && nix profile install nixpkgs#cachix \
     && cachix use devenv
 
 # Stage 2: DevEnv Environment Build (Cached Layer)  
@@ -53,7 +54,7 @@ RUN mkdir -p /app/data /app/conf /app/staticfiles
 ENV ENDO_API_MODE=production
 ENV DJANGO_SETTINGS_MODULE=endo_api.settings_prod
 # Pre-build static files in production environment - critical for performance
-RUN devenv shell -- python manage.py collectstatic --noinput || echo "Static collection completed"
+RUN devenv shell -- python manage.py collectstatic --noinput
 
 # Stage 4: Production Runtime (Minimal)
 FROM devenv-cache as production

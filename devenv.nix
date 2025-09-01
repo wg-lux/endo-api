@@ -232,20 +232,6 @@ in
       echo "Warning: .env file not found. Please run 'devenv task run env:build' to create it."
     fi
 
-    ${if isDev then ''
-      # Development mode setup will be done dynamically
-      if [ "$ENDO_API_MODE" = "development" ]; then
-        echo "Development mode: SQLite database will be used"
-        echo "Local PostgreSQL service available via 'devenv up postgres'"
-      fi
-    '' else ''
-      # Production mode setup will be done dynamically  
-      if [ "$ENDO_API_MODE" = "production" ]; then
-        echo "Production mode: Expecting external PostgreSQL and Redis services"
-        echo "Ensure your database connection settings are properly configured"
-      fi
-    ''}
-
     # Dynamic mode messaging
     if [ "$ENDO_API_MODE" = "production" ]; then
       echo "Production mode: Expecting external PostgreSQL and Redis services"

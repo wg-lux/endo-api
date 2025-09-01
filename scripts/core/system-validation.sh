@@ -81,6 +81,103 @@ record_result() {
 }
 
 # Test functions
+test_system_compatibility() {
+    log_header "🔧 System Compatibility Check"
+    
+    # Test bash availability and version
+    log_info "🔍 Checking bash availability and version..."
+    if ! command -v bash >/dev/null 2>&1; then
+        log_error "bash not found in PATH"
+        record_result "bash_availability" "FAIL" "bash command not found"
+        return 1
+    fi
+    
+    local bash_version=$(bash --version | head -n1 | grep -oE '[0-9]+\.[0-9]+' | head -n1)
+    local bash_major=$(echo "$bash_version" | cut -d. -f1)
+    
+    if [ "$bash_major" -lt 4 ]; then
+        log_warning "Old bash version detected: $bash_version (recommend 4.0+)"
+        record_result "bash_version" "WARNING" "bash $bash_version detected (old)" "$bash_version"
+    else
+        log_success "bash $bash_version detected"
+        record_result "bash_version" "PASS" "bash $bash_version compatible" "$bash_version"
+    fi
+    
+    # Test shebang compatibility by creating and executing a test script
+    log_info "🔍 Testing shebang '#!/usr/bin/env bash' compatibility..."
+    local test_script="/tmp/test-shebang-$$"
+    
+    cat > "$test_script" << 'EOF'
+#!/usr/bin/env bash
+# Test script to verify shebang works
+echo "shebang_test_passed"
+exit 0
+EOF
+    
+    chmod +x "$test_script"
+    
+    if "$test_script" 2>/dev/null | grep -q "shebang_test_passed"; then
+        log_success "Shebang '#!/usr/bin/env bash' works correctly"
+        record_result "shebang_compatibility" "PASS" "Shebang execution successful"
+        rm -f "$test_script"
+    else
+        log_error "Shebang '#!/usr/bin/env bash' failed"
+        record_result "shebang_compatibility" "FAIL" "Shebang execution failed"
+        rm -f "$test_script"
+        return 1
+    fi
+    
+    # Test required system commands
+    log_info "🔍 Checking required system commands..."
+    local required_commands=("env" "curl" "timeout" "docker" "python3" "git")
+    local missing_commands=()
+    local found_commands=()
+    
+    for cmd in "${required_commands[@]}"; do
+        if command -v "$cmd" >/dev/null 2>&1; then
+            found_commands+=("$cmd")
+            log_success "$cmd available"
+        else
+            missing_commands+=("$cmd")
+            log_warning "$cmd not found"
+        fi
+    done
+    
+    if [ ${#missing_commands[@]} -eq 0 ]; then
+        record_result "system_commands" "PASS" "All required commands available" "$(printf '%s,' "${found_commands[@]}")"
+    else
+        if printf '%s\n' "${missing_commands[@]}" | grep -q -E '^(docker|git)$'; then
+            record_result "system_commands" "WARNING" "Some optional commands missing" "missing: $(printf '%s,' "${missing_commands[@]}")"
+        else
+            record_result "system_commands" "FAIL" "Critical commands missing" "missing: $(printf '%s,' "${missing_commands[@]}")"
+            return 1
+        fi
+    fi
+    
+    # Test date command with ISO format (used for timestamps)
+    log_info "🔍 Testing date command ISO format support..."
+    if date -Iseconds >/dev/null 2>&1; then
+        log_success "date -Iseconds supported"
+        record_result "date_iso" "PASS" "ISO date format supported"
+    else
+        log_warning "date -Iseconds not supported (may affect timestamps)"
+        record_result "date_iso" "WARNING" "ISO date format not supported"
+    fi
+    
+    # Test associative arrays (bash 4+ feature used in this script)
+    log_info "🔍 Testing bash associative arrays..."
+    if bash -c 'declare -A test_array; test_array[key]="value"; [ "${test_array[key]}" = "value" ]' 2>/dev/null; then
+        log_success "Bash associative arrays supported"
+        record_result "bash_arrays" "PASS" "Associative arrays work"
+    else
+        log_error "Bash associative arrays not supported (requires bash 4+)"
+        record_result "bash_arrays" "FAIL" "Associative arrays failed"
+        return 1
+    fi
+    
+    return 0
+}
+
 test_file_structure() {
     log_header "📁 File Structure Validation"
     
@@ -392,83 +489,100 @@ test_legacy_compatibility() {
 generate_json_summary() {
     log_header "📊 Generating JSON Summary"
     
-    # Create JSON structure
-    cat > "$OUTPUT_FILE" <<EOF
-{
-  "timestamp": "${status_results[timestamp]}",
-  "validation_port": ${status_results[validation_port]},
-  "project_root": "${status_results[project_root]}",
-  "summary": {
-    "total_tests": 0,
-    "passed": 0,
-    "warnings": 0,
-    "failed": 0,
-    "skipped": 0
-  },
-  "tests": {
-EOF
-
-    local test_entries=()
+    # Set error handling to not exit on error for this function
+    set +e
+    
+    # Simple version for debugging
     local total=0 passed=0 warnings=0 failed=0 skipped=0
     
-    # Process all test results
+    # Count results first with better error handling
+    log_info "Counting test results..."
+    
+    if [ ${#status_results[@]} -eq 0 ]; then
+        log_warning "No status results found!"
+        return 1
+    fi
+    
+    # Debug: show all keys
+    log_info "Status array contains ${#status_results[@]} entries"
+    
     for key in "${!status_results[@]}"; do
         if [[ $key == *.result ]]; then
-            local test_name="${key%.result}"
             local result="${status_results[$key]}"
-            local message="${status_results[${test_name}.message]:-}"
-            local details="${status_results[${test_name}.details]:-}"
-            
+            log_info "Processing result key: $key = $result"
             case "$result" in
                 "PASS") ((passed++)) ;;
                 "FAIL") ((failed++)) ;;
                 "WARNING") ((warnings++)) ;;
                 "SKIP") ((skipped++)) ;;
+                *) log_warning "Unknown result type: $result" ;;
             esac
             ((total++))
-            
-            local entry="    \"$test_name\": {
-      \"result\": \"$result\",
-      \"message\": \"$message\""
-            
-            if [ -n "$details" ]; then
-                entry="$entry,
-      \"details\": \"$details\""
-            fi
-            
-            entry="$entry
-    }"
-            
-            test_entries+=("$entry")
         fi
     done
     
-    # Join test entries with commas
-    local IFS=","
-    echo "${test_entries[*]}" >> "$OUTPUT_FILE"
+    log_info "Found $total test results: $passed passed, $warnings warnings, $failed failed, $skipped skipped"
     
-    # Complete JSON structure
-    cat >> "$OUTPUT_FILE" <<EOF
-  },
-  "environment": {
-    "devenv_active": ${IN_NIX_SHELL:-false},
-    "django_settings": "${DJANGO_SETTINGS_MODULE:-"not_set"}",
-    "endo_api_mode": "${ENDO_API_MODE:-"not_set"}", 
-    "python_path": "$(which python3)",
-    "docker_available": $(command -v docker >/dev/null 2>&1 && echo "true" || echo "false")
-  }
-}
-EOF
-
-    # Update summary counts
-    sed -i "s/\"total_tests\": 0/\"total_tests\": $total/" "$OUTPUT_FILE"
-    sed -i "s/\"passed\": 0/\"passed\": $passed/" "$OUTPUT_FILE"
-    sed -i "s/\"warnings\": 0/\"warnings\": $warnings/" "$OUTPUT_FILE"
-    sed -i "s/\"failed\": 0/\"failed\": $failed/" "$OUTPUT_FILE"
-    sed -i "s/\"skipped\": 0/\"skipped\": $skipped/" "$OUTPUT_FILE"
+    # Create basic JSON structure
+    {
+        echo "{"
+        echo "  \"timestamp\": \"${status_results[timestamp]:-$(date -Iseconds)}\","
+        echo "  \"validation_port\": ${status_results[validation_port]:-10123},"
+        echo "  \"project_root\": \"${status_results[project_root]:-$PWD}\","
+        echo "  \"summary\": {"
+        echo "    \"total_tests\": $total,"
+        echo "    \"passed\": $passed,"
+        echo "    \"warnings\": $warnings,"
+        echo "    \"failed\": $failed,"
+        echo "    \"skipped\": $skipped"
+        echo "  },"
+        echo "  \"tests\": {"
+        
+        # Add test entries
+        local first=true
+        for key in "${!status_results[@]}"; do
+            if [[ $key == *.result ]]; then
+                local test_name="${key%.result}"
+                local result="${status_results[$key]}"
+                local message="${status_results[${test_name}.message]:-No message}"
+                
+                if [ "$first" = "true" ]; then
+                    first=false
+                else
+                    echo ","
+                fi
+                
+                # Basic JSON entry
+                echo "    \"$test_name\": {"
+                echo "      \"result\": \"$result\","
+                echo "      \"message\": \"$(echo "$message" | sed 's/"/\\"/g')\""
+                echo -n "    }"
+            fi
+        done
+        
+        echo ""
+        echo "  },"
+        echo "  \"environment\": {"
+        echo "    \"devenv_active\": ${IN_NIX_SHELL:-false},"
+        echo "    \"django_settings\": \"${DJANGO_SETTINGS_MODULE:-not_set}\","
+        echo "    \"endo_api_mode\": \"${ENDO_API_MODE:-not_set}\","
+        echo "    \"python_path\": \"$(command -v python3 2>/dev/null || echo not_found)\","
+        echo "    \"docker_available\": $(command -v docker >/dev/null 2>&1 && echo true || echo false)"
+        echo "  }"
+        echo "}"
+    } > "$OUTPUT_FILE"
     
-    log_success "JSON summary generated: $OUTPUT_FILE"
-    log_info "Results: $passed passed, $warnings warnings, $failed failed, $skipped skipped"
+    # Re-enable error handling
+    set -e
+    
+    if [ -f "$OUTPUT_FILE" ]; then
+        log_success "JSON summary generated: $OUTPUT_FILE ($(wc -c < "$OUTPUT_FILE" 2>/dev/null || echo "?") bytes)"
+        log_info "Results: $passed passed, $warnings warnings, $failed failed, $skipped skipped"
+        return 0
+    else
+        log_error "Failed to create JSON file"
+        return 1
+    fi
 }
 
 show_summary() {
@@ -555,6 +669,17 @@ main() {
     fi
     
     cd "$PROJECT_ROOT"
+    
+    # Run system compatibility check first
+    log_info "🔍 Running system compatibility checks..."
+    if ! test_system_compatibility; then
+        log_error "❌ System compatibility check failed - cannot proceed safely"
+        generate_json_summary
+        if [ "$json_only" = false ]; then
+            show_summary
+        fi
+        exit 1
+    fi
     
     # Run all validation tests
     test_file_structure || true
