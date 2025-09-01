@@ -81,11 +81,13 @@ class EnvironmentSetup:
     def _load_nix_variables(self) -> Dict[str, str]:
         """Load required environment variables"""
         required_vars = [
-            "WORKING_DIR", "CONF_DIR", "HOME_DIR", "DJANGO_MODULE",
+            "CONF_DIR", "HOME_DIR", "DJANGO_MODULE",
             "DJANGO_HOST", "DB_PWD_FILE", "DJANGO_PORT", "DATA_DIR"
         ]
         
+        # Optional variables with smart defaults
         optional_vars = [
+            "WORKING_DIR",  # Can be derived from current directory
             "IMPORT_DIR", "IMPORT_VIDEO_DIR", "IMPORT_REPORT_DIR",
             "MODEL_DIR", "CONF_TEMPLATE_DIR", "STORAGE_DIR",
             "DJANGO_SETTINGS_MODULE_PRODUCTION",
@@ -102,8 +104,9 @@ class EnvironmentSetup:
                 raise ValueError(f"Missing required environment variable: {var}")
             vars_dict[var] = value
         
-        # Optional variables with defaults
+        # Optional variables with smart defaults
         defaults = {
+            "WORKING_DIR": os.getcwd(),  # Use current working directory
             "IMPORT_DIR": "data/import",
             "IMPORT_VIDEO_DIR": "data/import/video", 
             "IMPORT_REPORT_DIR": "data/import/report",
@@ -260,7 +263,7 @@ class EnvironmentSetup:
                 
                 if "DJANGO_SALT" not in found_keys:
                     salt = get_random_secret_key()
-                    f.write(f'DJANGO_SALT={salt}\n')
+                    f.write(f'DJANGO_SALT="{salt}"\n')
                     print("✅ Added DJANGO_SALT to .env")
                     self.status["secrets_generated"] = True
                 else:

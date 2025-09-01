@@ -60,14 +60,17 @@ in
         
         echo "Mode: $ENDO_API_MODE"
         
-        # Step 2: Create directories
+        # Step 2: Ensure WORKING_DIR is set (fallback to current directory)
+        export WORKING_DIR="''${WORKING_DIR:-$(pwd)}"
+        
+        # Step 3: Create directories
         mkdir -p ${appConfig.paths.data} ${appConfig.paths.conf} staticfiles
         mkdir -p ${appConfig.paths.data}/{import,export,videos,frames,pdfs,model_weights,logs}
         
-        # Step 3: Configuration setup (use existing scripts)
+        # Step 4: Configuration setup (use existing scripts)
         ${pkgs.uv}/bin/uv run python scripts/database/make_conf.py
         
-        # Step 4: Environment file setup
+        # Step 5: Environment file setup
         ${pkgs.uv}/bin/uv run python scripts/core/setup.py
         
         # Step 5: CUDA environment setup
