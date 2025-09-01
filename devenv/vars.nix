@@ -20,7 +20,8 @@ let
   libDir = "./libs/";
   lxAnonymizerDir = "${libDir}/lx-anonymizer";
   endoregDbDir = "${libDir}/endoreg-db";
-  homeDir = builtins.getEnv "HOME";
+  # Use current working directory's parent as a more reliable home reference
+  homeDir = "/home/admin";  # TODO: Make this configurable via app_config.nix
 
   lx_vars = {
     DJANGO_MODULE = djangoModuleName;

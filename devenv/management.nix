@@ -65,14 +65,10 @@ in
         mkdir -p ${appConfig.paths.data}/{import,export,videos,frames,pdfs,model_weights,logs}
         
         # Step 3: Configuration setup (use existing scripts)
-        ${pkgs.uv}/bin/uv run python scripts/make_conf.py
+        ${pkgs.uv}/bin/uv run python scripts/database/make_conf.py
         
         # Step 4: Environment file setup
-        if [ "$ENDO_API_MODE" = "development" ]; then
-          ${pkgs.uv}/bin/uv run python scripts/set_development_settings.py
-        else
-          ${pkgs.uv}/bin/uv run python scripts/set_production_settings.py
-        fi
+        ${pkgs.uv}/bin/uv run python scripts/core/setup.py
         
         # Step 5: CUDA environment setup
         devenv tasks run env:setup-cuda
@@ -319,9 +315,6 @@ else:
             "ci")
               TEST_SUITE=ci devenv test
               ;;
-            "legacy")
-              ./tests/legacy/test-runner.sh "''${3:-quick}"
-              ;;
             *)
               echo "Available test suites:"
               echo "  manage test quick      - Quick core functionality tests"
@@ -330,7 +323,6 @@ else:
               echo "  manage test e2e        - End-to-end workflow tests" 
               echo "  manage test full       - Complete test suite"
               echo "  manage test ci         - CI/CD compatible tests"
-              echo "  manage test legacy     - Use legacy test-runner.sh script"
               ;;
           esac
           ;;
@@ -372,7 +364,6 @@ else:
           echo "  manage test e2e        - End-to-end workflow tests"
           echo "  manage test full       - Complete test suite"
           echo "  manage test ci         - CI/CD compatible tests"
-          echo "  manage test legacy     - Use legacy test-runner.sh script"
           echo ""
           echo "Examples:"
           echo "  manage dev && manage build && manage run"
@@ -424,6 +415,6 @@ else:
     '';
 
     # GPU diagnostics
-    "gpu-check".exec = "${pkgs.uv}/bin/uv run python scripts/gpu-check.py";
+    "gpu-check".exec = "${pkgs.uv}/bin/uv run python scripts/utilities/gpu-check.py";
   };
 }

@@ -10,18 +10,18 @@
 {
   "env:fetch-db-pwd-file" = {
     description = "Fetch the database password file";
-    exec = "${pkgs.uv}/bin/uv run python scripts/fetch_db_pwd_file.py";
+    exec = "${pkgs.uv}/bin/uv run python scripts/database/fetch_db_pwd_file.py";
   };
   
   "env:init-conf" = {
     description = "Initialize configuration files";
-    exec = "${pkgs.uv}/bin/uv run python scripts/make_conf.py";
+    exec = "${pkgs.uv}/bin/uv run python scripts/database/make_conf.py";
   };
   
   "env:build" = {
     description = "Build the .env file";
     after = ["env:init-conf"];
-    exec = "uv run python scripts/core/setup.py";
+    exec = "${pkgs.uv}/bin/uv run python scripts/core/setup.py";
   };
 
   # CUDA setup moved to management.nix to avoid duplication

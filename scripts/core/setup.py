@@ -254,11 +254,17 @@ class EnvironmentSetup:
                     f.write(f'\nDJANGO_SECRET_KEY="{secret_key}"\n')
                     print("✅ Added DJANGO_SECRET_KEY to .env")
                     self.status["secrets_generated"] = True
+                else:
+                    print("✅ DJANGO_SECRET_KEY already exists in .env")
+                    self.status["secrets_generated"] = True
                 
                 if "DJANGO_SALT" not in found_keys:
                     salt = get_random_secret_key()
                     f.write(f'DJANGO_SALT={salt}\n')
                     print("✅ Added DJANGO_SALT to .env")
+                    self.status["secrets_generated"] = True
+                else:
+                    print("✅ DJANGO_SALT already exists in .env")
                     self.status["secrets_generated"] = True
                 
                 # Add configuration variables if missing

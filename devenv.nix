@@ -100,8 +100,8 @@ in
 
   # Comprehensive testing using enterTest
   enterTest = ''
-    # Source common test functions
-    source ${./tests/legacy/test-functions.sh}
+    # Source common test functions from archive
+    source ${./tests/archive/test-functions.sh}
     
     # Run the test suite based on TEST_SUITE environment variable
     test_suite=''${TEST_SUITE:-quick}

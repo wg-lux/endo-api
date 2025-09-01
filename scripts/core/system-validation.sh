@@ -95,7 +95,6 @@ test_file_structure() {
         "scripts/database/ensure_psql.py"
         "scripts/utilities/gpu-check.py"
         "scripts/cuda/test_cuda_detailed.py"
-        "tests/legacy/test-containers.sh"
         "container/Dockerfile.dev"
         "container/Dockerfile.prod"
         "docs/implementation-reports/"
