@@ -140,114 +140,97 @@ else:
       '';
     };
 
-    # Container Management
+    # Container Management - Using DevEnv Native Containers
     "container:build" = {
-      description = "Build container for current mode";
+      description = "Build DevEnv container for current mode";
       exec = ''
-        echo "🔨 Building container for mode: $ENDO_API_MODE"
+        echo "🔨 Building DevEnv container for mode: $ENDO_API_MODE"
         
         MODE_SUFFIX=$([[ "$ENDO_API_MODE" == "production" ]] && echo "prod" || echo "dev")
-        CONTAINER_NAME="${appConfig.app.name}-$MODE_SUFFIX"
         
-        echo "Building DevEnv container: $CONTAINER_NAME"
-        devenv container build "$CONTAINER_NAME"
+        echo "Building native DevEnv container: $MODE_SUFFIX"
         
-        echo "Copying to Docker daemon..."
-        devenv container copy "$CONTAINER_NAME"
+        # Build the DevEnv container using native devenv container system
+        CONTAINER_SPEC=$(devenv container build "$MODE_SUFFIX" 2>&1 | tee /tmp/devenv-build.log)
         
-        # Tag properly - use devenv's container name to find the correct image
-        echo "Finding and tagging container image..."
-        
-        # DevEnv creates images with predictable naming, look for our specific container
-        IMAGE_ID=$(docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}" | grep "$CONTAINER_NAME" | head -1 | awk '{print $3}')
-        
-        # Fallback: if devenv naming doesn't match, look for the most recent image without a name
-        if [ -z "$IMAGE_ID" ]; then
-          echo "Primary lookup failed, trying fallback method..."
-          IMAGE_ID=$(docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}" | grep "^<none>" | head -1 | awk '{print $3}')
-        fi
-        
-        # Final fallback: get the most recently created image (dangerous but better than failing)
-        if [ -z "$IMAGE_ID" ]; then
-          echo "⚠️  Fallback: Using most recent image (may be incorrect)"
-          IMAGE_ID=$(docker images -q --format "table {{.CreatedAt}}\t{{.ID}}" | sort -r | head -1 | awk '{print $2}')
-        fi
-        
-        if [ ! -z "$IMAGE_ID" ]; then
-          echo "Found image ID: $IMAGE_ID"
-          docker tag "$IMAGE_ID" "$CONTAINER_NAME:latest"
-          echo "✅ Container ready: $CONTAINER_NAME:latest"
+        if [ $? -eq 0 ]; then
+          # Extract the container specification path from the output
+          SPEC_PATH=$(echo "$CONTAINER_SPEC" | grep -E '^/nix/store.*\.json$' | head -1)
           
-          # Verify the tag worked
-          if docker images "$CONTAINER_NAME:latest" | grep -q "$CONTAINER_NAME"; then
-            echo "✅ Tag verification successful"
+          if [ -n "$SPEC_PATH" ]; then
+            echo "✅ DevEnv container built successfully"
+            echo "Container specification: $SPEC_PATH"
+            
+            # Copy to Docker daemon for local testing (optional)
+            echo "Copying container to Docker daemon..."
+            if devenv container copy "$MODE_SUFFIX" 2>/dev/null; then
+              echo "✅ Container copied to Docker daemon"
+              
+              # List available images to verify
+              echo "Available container images:"
+              docker images | grep endo-api | head -5
+            else
+              echo "⚠️  Failed to copy to Docker daemon, but DevEnv container is ready"
+              echo "Use 'devenv container run $MODE_SUFFIX' to test"
+            fi
           else
-            echo "⚠️  Tag verification failed, but continuing..."
+            echo "⚠️  Container built but couldn't find specification path"
+            cat /tmp/devenv-build.log
           fi
         else
-          echo "❌ Failed to find container image"
-          echo "Available images:"
-          docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.CreatedSince}}"
+          echo "❌ Container build failed"
+          cat /tmp/devenv-build.log
           exit 1
         fi
       '';
     };
 
     "container:run" = {
-      description = "Run container for current mode";
+      description = "Run DevEnv container for current mode";
       exec = ''
-        echo "🚀 Running container for mode: $ENDO_API_MODE"
+        echo "🚀 Running DevEnv container for mode: $ENDO_API_MODE"
         
         MODE_SUFFIX=$([[ "$ENDO_API_MODE" == "production" ]] && echo "prod" || echo "dev")
-        CONTAINER_NAME="${appConfig.app.name}-$MODE_SUFFIX"
-        INSTANCE_NAME="$CONTAINER_NAME-test"
         
-        # GPU support detection
-        ${gpuArgs}
-        
-        # Stop existing container with improved error handling
-        echo "Stopping existing container if running..."
-        if docker ps -q -f name="$INSTANCE_NAME" | grep -q .; then
-          echo "Found running container: $INSTANCE_NAME"
-          if docker stop "$INSTANCE_NAME" 2>/dev/null; then
-            echo "✅ Successfully stopped $INSTANCE_NAME"
-          else
-            echo "⚠️  Failed to stop $INSTANCE_NAME, attempting force kill..."
-            docker kill "$INSTANCE_NAME" 2>/dev/null || echo "⚠️  Force kill also failed, continuing anyway..."
-          fi
+        # First try to run using DevEnv's native container runner
+        echo "Starting DevEnv container: $MODE_SUFFIX"
+        if devenv container run "$MODE_SUFFIX" 2>/dev/null; then
+          echo "✅ DevEnv container started successfully"
         else
-          echo "No running container named $INSTANCE_NAME found"
-        fi
-        
-        # Remove existing container with improved error handling
-        echo "Removing existing container if present..."
-        if docker ps -aq -f name="$INSTANCE_NAME" | grep -q .; then
-          echo "Found existing container: $INSTANCE_NAME"
-          if docker rm "$INSTANCE_NAME" 2>/dev/null; then
-            echo "✅ Successfully removed $INSTANCE_NAME"
-          else
-            echo "⚠️  Failed to remove $INSTANCE_NAME, attempting force removal..."
-            if docker rm -f "$INSTANCE_NAME" 2>/dev/null; then
-              echo "✅ Force removal successful"
-            else
-              echo "❌ Force removal failed, but continuing with new container creation..."
-            fi
+          echo "⚠️  DevEnv container run failed, trying Docker fallback..."
+          
+          # Fallback to Docker if DevEnv container run fails
+          CONTAINER_NAME="endo-api-$MODE_SUFFIX"
+          INSTANCE_NAME="$CONTAINER_NAME"
+          
+          # GPU support detection
+          ${gpuArgs}
+          
+          # Stop existing container
+          if docker ps -q -f name="$INSTANCE_NAME" | grep -q .; then
+            docker stop "$INSTANCE_NAME" 2>/dev/null || docker kill "$INSTANCE_NAME" 2>/dev/null || true
           fi
-        else
-          echo "No existing container named $INSTANCE_NAME found"
+          
+          # Remove existing container
+          docker rm "$INSTANCE_NAME" 2>/dev/null || true
+          
+          # Check if image exists in Docker
+          if docker images "$CONTAINER_NAME" | grep -q "$CONTAINER_NAME"; then
+            echo "Using Docker image: $CONTAINER_NAME"
+            docker run -d \
+              --name "$INSTANCE_NAME" \
+              ${builtins.concatStringsSep " \\\n  " (commonContainerArgs "$ENDO_API_MODE")} \
+              $GPU_ARGS \
+              "$CONTAINER_NAME:latest"
+            
+            echo "✅ Docker container started: $INSTANCE_NAME"
+            echo "   Access: http://localhost:${appConfig.server.port}"
+            echo "   Logs: docker logs -f $INSTANCE_NAME"
+          else
+            echo "❌ No container image found. Please run 'manage build' first"
+            exit 1
+          fi
         fi
-        
-        # Run new container
-        echo "Starting container: $INSTANCE_NAME"
-        docker run -d \
-          --name "$INSTANCE_NAME" \
-          ${builtins.concatStringsSep " \\\n  " (commonContainerArgs "$ENDO_API_MODE")} \
-          $GPU_ARGS \
-          "$CONTAINER_NAME:latest"
-        
-        echo "✅ Container started: $INSTANCE_NAME"
-        echo "   Access: http://localhost:${appConfig.server.port}"
-        echo "   Logs: docker logs -f $INSTANCE_NAME"
       '';
     };
 
@@ -255,57 +238,90 @@ else:
       description = "Stop containers";
       exec = ''
         echo "🛑 Stopping containers..."
+        
+        # Stop DevEnv containers first (if running)
+        for mode in dev prod processes; do
+          echo "Checking DevEnv container: $mode"
+          # DevEnv doesn't have a direct stop command, so we check Docker containers
+        done
+        
+        # Stop Docker containers (both regular and test containers)
         for mode in dev prod; do
-          INSTANCE_NAME="${appConfig.app.name}-$mode-test"
-          if docker ps -q -f name="$INSTANCE_NAME" | grep -q .; then
-            echo "Stopping $INSTANCE_NAME..."
-            if docker stop "$INSTANCE_NAME" 2>/dev/null; then
-              echo "✅ Successfully stopped $INSTANCE_NAME"
+          # Stop regular containers (used by manage run)
+          CONTAINER_NAME="endo-api-$mode"
+          
+          if docker ps -q -f name="$CONTAINER_NAME" | grep -q .; then
+            echo "Stopping Docker container: $CONTAINER_NAME"
+            if docker stop "$CONTAINER_NAME" 2>/dev/null; then
+              echo "✅ Successfully stopped $CONTAINER_NAME"
             else
-              echo "⚠️  Normal stop failed for $INSTANCE_NAME, trying force kill..."
-              if docker kill "$INSTANCE_NAME" 2>/dev/null; then
-                echo "✅ Force killed $INSTANCE_NAME"
+              echo "⚠️  Normal stop failed, trying force kill..."
+              if docker kill "$CONTAINER_NAME" 2>/dev/null; then
+                echo "✅ Force killed $CONTAINER_NAME"
               else
-                echo "❌ Failed to stop $INSTANCE_NAME (may already be stopped)"
+                echo "❌ Failed to stop $CONTAINER_NAME"
               fi
             fi
-          else
-            echo "No running container named $INSTANCE_NAME found"
+          fi
+          
+          # Also stop test containers (used by test suite)
+          TEST_INSTANCE_NAME="$CONTAINER_NAME-test"
+          if docker ps -q -f name="$TEST_INSTANCE_NAME" | grep -q .; then
+            echo "Stopping test container: $TEST_INSTANCE_NAME"
+            if docker stop "$TEST_INSTANCE_NAME" 2>/dev/null; then
+              echo "✅ Successfully stopped $TEST_INSTANCE_NAME"
+            else
+              echo "⚠️  Normal stop failed, trying force kill..."
+              if docker kill "$TEST_INSTANCE_NAME" 2>/dev/null; then
+                echo "✅ Force killed $TEST_INSTANCE_NAME"
+              else
+                echo "❌ Failed to stop $TEST_INSTANCE_NAME"
+              fi
+            fi
           fi
         done
+        
         echo "✅ Stop operation completed"
       '';
     };
 
     "container:remove" = {
-      description = "Remove containers";
+      description = "Remove containers and clean up";
       exec = ''
         echo "🗑️  Removing containers..."
+        
+        # Remove Docker containers (both regular and test containers)
         for mode in dev prod; do
-          INSTANCE_NAME="${appConfig.app.name}-$mode-test"
-          if docker ps -aq -f name="$INSTANCE_NAME" | grep -q .; then
-            echo "Removing $INSTANCE_NAME..."
-            # First try to stop if running
-            if docker ps -q -f name="$INSTANCE_NAME" | grep -q .; then
-              echo "Container is running, stopping first..."
-              docker stop "$INSTANCE_NAME" 2>/dev/null || docker kill "$INSTANCE_NAME" 2>/dev/null || true
-            fi
-            
-            # Now remove the container
-            if docker rm "$INSTANCE_NAME" 2>/dev/null; then
-              echo "✅ Successfully removed $INSTANCE_NAME"
+          CONTAINER_NAME="endo-api-$mode"
+          
+          # Remove regular containers
+          if docker ps -q -f name="$CONTAINER_NAME" | grep -q .; then
+            docker stop "$CONTAINER_NAME" 2>/dev/null || docker kill "$CONTAINER_NAME" 2>/dev/null || true
+          fi
+          
+          if docker ps -aq -f name="$CONTAINER_NAME" | grep -q .; then
+            if docker rm -f "$CONTAINER_NAME" 2>/dev/null; then
+              echo "✅ Removed Docker container: $CONTAINER_NAME"
             else
-              echo "⚠️  Normal removal failed for $INSTANCE_NAME, trying force removal..."
-              if docker rm -f "$INSTANCE_NAME" 2>/dev/null; then
-                echo "✅ Force removed $INSTANCE_NAME"
-              else
-                echo "❌ Failed to remove $INSTANCE_NAME (may not exist)"
-              fi
+              echo "❌ Failed to remove $CONTAINER_NAME"
             fi
-          else
-            echo "No container named $INSTANCE_NAME found"
+          fi
+          
+          # Remove test containers
+          TEST_INSTANCE_NAME="$CONTAINER_NAME-test"
+          if docker ps -q -f name="$TEST_INSTANCE_NAME" | grep -q .; then
+            docker stop "$TEST_INSTANCE_NAME" 2>/dev/null || docker kill "$TEST_INSTANCE_NAME" 2>/dev/null || true
+          fi
+          
+          if docker ps -aq -f name="$TEST_INSTANCE_NAME" | grep -q .; then
+            if docker rm -f "$TEST_INSTANCE_NAME" 2>/dev/null; then
+              echo "✅ Removed test container: $TEST_INSTANCE_NAME"
+            else
+              echo "❌ Failed to remove $TEST_INSTANCE_NAME"
+            fi
           fi
         done
+        
         echo "✅ Remove operation completed"
       '';
     };
@@ -315,19 +331,49 @@ else:
       exec = ''
         echo "🧹 Cleaning up containers and images..."
         
-        # Remove containers
+        # Remove containers first
         devenv tasks run container:remove
         
-        # Remove images
+        # Remove Docker images
         for mode in dev prod; do
-          IMAGE_NAME="${appConfig.app.name}-$mode"
-          if docker images -q "$IMAGE_NAME" | grep -q .; then
-            docker rmi "$IMAGE_NAME:latest" 2>/dev/null || true
-            echo "✅ Removed image $IMAGE_NAME:latest"
+          IMAGE_NAME="endo-api-$mode"
+          if docker images -q "$IMAGE_NAME" 2>/dev/null | grep -q .; then
+            echo "Removing Docker image: $IMAGE_NAME"
+            docker rmi "$IMAGE_NAME:latest" 2>/dev/null || docker rmi -f "$IMAGE_NAME:latest" 2>/dev/null || true
           fi
         done
         
+        # Clean up DevEnv container build artifacts (if any)
+        echo "Cleaning up DevEnv container artifacts..."
+        rm -f /tmp/devenv-build.log 2>/dev/null || true
+        
         echo "✅ Cleanup complete"
+      '';
+    };
+
+    "container:cleanup-tests" = {
+      description = "Clean up test containers specifically";
+      exec = ''
+        echo "🧪 Cleaning up test containers..."
+        
+        # Define test container names
+        TEST_CONTAINERS=("endo-api-dev-test" "endo-api-prod-test" "endo-api-processes-test")
+        
+        for container in "''${TEST_CONTAINERS[@]}"; do
+          # Stop if running
+          if docker ps -q -f name="$container" | grep -q .; then
+            echo "Stopping test container: $container"
+            docker stop "$container" 2>/dev/null || docker kill "$container" 2>/dev/null || true
+          fi
+          
+          # Remove if exists
+          if docker ps -aq -f name="$container" | grep -q .; then
+            echo "Removing test container: $container"
+            docker rm -f "$container" 2>/dev/null || true
+          fi
+        done
+        
+        echo "✅ Test container cleanup complete"
       '';
     };
 

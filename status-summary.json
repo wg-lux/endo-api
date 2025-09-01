@@ -1,13 +1,13 @@
 {
-  "timestamp": "2025-09-01T12:28:43+02:00",
+  "timestamp": "2025-09-01T13:20:34+02:00",
   "validation_port": 10123,
   "project_root": "/home/admin/dev/endo-api",
   "summary": {
     "total_tests": 16,
-    "passed": 11,
-    "warnings": 2,
-    "failed": 1,
-    "skipped": 2
+    "passed": 10,
+    "warnings": 1,
+    "failed": 0,
+    "skipped": 5
   },
   "tests": {
     "cuda_detailed": {
@@ -19,12 +19,12 @@
       "message": "ISO date format supported"
     },
     "container_dev_build": {
-      "result": "PASS",
-      "message": "Dev container available"
+      "result": "SKIP",
+      "message": "Container tests skipped by user"
     },
     "container_prod_run": {
       "result": "SKIP",
-      "message": "Skipped due to build failure"
+      "message": "Container tests skipped by user"
     },
     "database": {
       "result": "PASS",
@@ -35,8 +35,8 @@
       "message": "All required files present"
     },
     "container_dev_run": {
-      "result": "WARNING",
-      "message": "Dev container runs but response unclear"
+      "result": "SKIP",
+      "message": "Container tests skipped by user"
     },
     "setup_script": {
       "result": "PASS",
@@ -51,8 +51,8 @@
       "message": "GPU/CUDA not available or has issues"
     },
     "container_prod_build": {
-      "result": "FAIL",
-      "message": "Prod container build failed"
+      "result": "SKIP",
+      "message": "Container tests skipped by user"
     },
     "environment_config": {
       "result": "PASS",
@@ -78,7 +78,7 @@
   "environment": {
     "devenv_active": impure,
     "django_settings": "endo_api.settings_dev",
-    "endo_api_mode": "development",
+    "endo_api_mode": "production",
     "python_path": "/home/admin/dev/endo-api/.devenv/state/venv/bin/python3",
     "docker_available": true
   }
