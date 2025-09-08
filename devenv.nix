@@ -66,8 +66,8 @@ in
     cudaPackages.cuda_nvcc
   ] ++ runtimePackages;
 
-  # Lean environment: no app mode or DB configuration here
-  env = { } // devenv_utils.lx_vars;
+  # Use environment from utils (includes LD_LIBRARY_PATH) and merge with lx_vars if needed
+  env = devenv_utils.environment;
 
   enterTest = ''
     TEST_SUITE_VAR="''${TEST_SUITE:-quick}"

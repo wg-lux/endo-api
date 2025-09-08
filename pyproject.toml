@@ -39,10 +39,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    # Add development tools here, e.g.:
-    # "pytest",
+    "pytest>=8.0.0",
     # "ruff",
-    # "black",
 ]
 
 [build-system]

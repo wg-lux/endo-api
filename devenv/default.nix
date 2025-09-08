@@ -49,7 +49,7 @@ let
   
   environment = import ./environment.nix { 
     lxVars = lx_vars;
-    inherit buildInputs pkgs lib isDev appConfig;
+    inherit buildInputs runtimePackages pkgs lib isDev appConfig;
   };
 
   # Import centralized management system

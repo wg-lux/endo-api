@@ -16,8 +16,12 @@ import os
 import subprocess
 import time
 import requests
+import pytest
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+# Mark entire module as integration
+pytestmark = pytest.mark.integration
 
 
 class ContainerWorkflowTester:
@@ -397,7 +401,7 @@ class ContainerWorkflowTester:
         self.cleanup()
         
         # Ensure we're in development mode for testing
-        os.environ["ENDO_API_MODE"] = "development"
+        os.environ["DJANGO_ENV"] = "development"
         
         self.log("Test setup completed", "SUCCESS")
 

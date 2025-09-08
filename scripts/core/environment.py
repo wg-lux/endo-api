@@ -63,8 +63,7 @@ class EnvironmentManager:
             print(f"⚠️  Using default development settings: {settings_module}")
         
         self._update_env_var("DJANGO_SETTINGS_MODULE", settings_module)
-        self._update_env_var("ENDO_API_MODE", "development")
-        self._update_env_var("DJANGO_DEBUG", "True")
+        self._update_env_var("DJANGO_ENV", "development")
         
         self._save_env_file()
         print("✅ Development environment configured")
@@ -79,8 +78,7 @@ class EnvironmentManager:
             print(f"⚠️  Using default production settings: {settings_module}")
         
         self._update_env_var("DJANGO_SETTINGS_MODULE", settings_module)
-        self._update_env_var("ENDO_API_MODE", "production")
-        self._update_env_var("DJANGO_DEBUG", "False")
+        self._update_env_var("DJANGO_ENV", "production")
         
         self._save_env_file()
         print("✅ Production environment configured")
@@ -95,9 +93,8 @@ class EnvironmentManager:
             print(f"⚠️  Using default central settings: {settings_module}")
         
         self._update_env_var("DJANGO_SETTINGS_MODULE", settings_module)
-        self._update_env_var("ENDO_API_MODE", "production")
+        self._update_env_var("DJANGO_ENV", "production")
         self._update_env_var("CENTRAL_NODE", "true")
-        self._update_env_var("DJANGO_DEBUG", "False")
         
         self._save_env_file()
         print("✅ Central node environment configured")
@@ -114,8 +111,7 @@ class EnvironmentManager:
         # Show relevant environment variables
         relevant_vars = [
             "DJANGO_SETTINGS_MODULE",
-            "ENDO_API_MODE", 
-            "DJANGO_DEBUG",
+            "DJANGO_ENV", 
             "CENTRAL_NODE"
         ]
         
