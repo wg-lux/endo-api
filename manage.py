@@ -7,18 +7,20 @@ import sys
 def main():
     """
     Initializes the Django environment and executes command-line administrative tasks.
-    
-    Raises:
-        ImportError: If Django is not installed or cannot be imported.
     """
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'endo_api.settings')
+    # Choose settings from DJANGO_ENV when not explicitly set
+    if "DJANGO_SETTINGS_MODULE" not in os.environ:
+        env = os.environ.get("DJANGO_ENV", "development").lower()
+        default_settings = (
+            "endo_api.settings_prod" if env == "production" else "endo_api.settings_dev"
+        )
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", default_settings)
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
         raise ImportError(
-            "Couldn't import Django. Are you sure it's installed and "
-            "available on your PYTHONPATH environment variable? Did you "
-            "forget to activate a virtual environment?"
+            "Couldn't import Django. Are you sure it's installed and available on your "
+            "PYTHONPATH environment variable? Did you forget to activate a virtual environment?"
         ) from exc
     execute_from_command_line(sys.argv)
 

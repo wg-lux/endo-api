@@ -1,0 +1,113 @@
+# Simple build/load/deploy workflow for RKE2
+# Requirements on the target node:
+# - Podman or Docker
+# - containerd (ctr) available (RKE2)
+# - kubectl configured (export KUBECONFIG=/etc/rancher/rke2/rke2.yaml)
+
+VERSION       ?= 1.0.0
+IMAGE_NAME    ?= endo-api
+IMG          ?= $(IMAGE_NAME):$(VERSION)
+NAMESPACE     ?= endo-api
+HOST          ?= endo-api.xulutions.net
+
+ENGINE       ?= $(shell command -v podman >/dev/null 2>&1 && echo podman || (command -v docker >/dev/null 2>&1 && echo docker))
+CTR_NS        ?= k8s.io
+IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
+
+.SHELLFLAGS := -eu -o pipefail -c
+
+.PHONY: help
+help:
+	@echo "Targets:"
+	@echo "  build           - Build production image ($(IMG))"
+	@echo "  save            - Save image to tar ($(IMAGE_TAR))"
+	@echo "  load            - Load image into containerd (sudo ctr -n $(CTR_NS) images import)"
+	@echo "  k8s-namespace   - Create namespace ($(NAMESPACE))"
+	@echo "  k8s-config      - Create/Update ConfigMap (non-secrets)"
+	@echo "  k8s-secrets     - Create/Update Secret from env (DJANGO_SECRET_KEY, DATABASE_URL or DB_*)"
+	@echo "  deploy          - Apply PVC, Deployment, Service, Ingress"
+	@echo "  undeploy        - Delete resources (keeps namespace)"
+	@echo "  logs            - Tail logs"
+	@echo "  status          - Show objects/status"
+
+.PHONY: build
+build:
+	@if [ -z "$(ENGINE)" ]; then echo "No container engine (podman|docker) found"; exit 1; fi
+	$(ENGINE) build -t $(IMG) -f container/Dockerfile.prod .
+
+.PHONY: save
+save:
+	@if [ -z "$(ENGINE)" ]; then echo "No container engine (podman|docker) found"; exit 1; fi
+	$(ENGINE) save -o $(IMAGE_TAR) $(IMG)
+	@ls -lh $(IMAGE_TAR)
+
+.PHONY: load
+load:
+	@echo "Importing $(IMAGE_TAR) into containerd namespace $(CTR_NS) (requires sudo)..."
+	sudo ctr -n $(CTR_NS) images import $(IMAGE_TAR)
+	sudo ctr -n $(CTR_NS) images ls | grep $(IMAGE_NAME) || true
+
+.PHONY: k8s-namespace
+k8s-namespace:
+	kubectl apply -f k8s/namespace.yaml
+
+.PHONY: k8s-config
+k8s-config: k8s-namespace
+	@echo "Applying ConfigMap endo-api-config in $(NAMESPACE)"
+	kubectl -n $(NAMESPACE) create configmap endo-api-config \
+	  --from-literal=DJANGO_ENV=production \
+	  --from-literal=DJANGO_DEBUG=false \
+	  --from-literal=DJANGO_ALLOWED_HOSTS="$(HOST)" \
+	  --from-literal=DJANGO_SETTINGS_MODULE="endo_api.settings_prod" \
+	  --dry-run=client -o yaml | kubectl apply -f -
+
+.PHONY: k8s-secrets
+k8s-secrets: k8s-namespace
+	@if [ -z "$$DJANGO_SECRET_KEY" ]; then echo "DJANGO_SECRET_KEY env is required"; exit 1; fi
+	@if [ -n "$$DATABASE_URL" ]; then \
+	  kubectl -n $(NAMESPACE) create secret generic endo-api-secrets \
+	    --from-literal=DJANGO_SECRET_KEY="$$DJANGO_SECRET_KEY" \
+	    --from-literal=DATABASE_URL="$$DATABASE_URL" \
+	    --dry-run=client -o yaml | kubectl apply -f - ; \
+	else \
+	  if [ -z "$$DB_ENGINE" ] || [ -z "$$DB_NAME" ] || [ -z "$$DB_USER" ] || [ -z "$$DB_PASSWORD" ] || [ -z "$$DB_HOST" ] || [ -z "$$DB_PORT" ]; then \
+	    echo "Either set DATABASE_URL or all of DB_ENGINE,DB_NAME,DB_USER,DB_PASSWORD,DB_HOST,DB_PORT"; exit 1; \
+	  fi; \
+	  kubectl -n $(NAMESPACE) create secret generic endo-api-secrets \
+	    --from-literal=DJANGO_SECRET_KEY="$$DJANGO_SECRET_KEY" \
+	    --from-literal=DB_ENGINE="$$DB_ENGINE" \
+	    --from-literal=DB_NAME="$$DB_NAME" \
+	    --from-literal=DB_USER="$$DB_USER" \
+	    --from-literal=DB_PASSWORD="$$DB_PASSWORD" \
+	    --from-literal=DB_HOST="$$DB_HOST" \
+	    --from-literal=DB_PORT="$$DB_PORT" \
+	    --dry-run=client -o yaml | kubectl apply -f - ; \
+	fi
+
+.PHONY: deploy
+deploy: k8s-namespace k8s-config k8s-secrets
+	kubectl apply -f k8s/pvc.yaml
+	@echo "Applying Deployment (image=$(IMG))"
+	@IMAGE="$(IMG)" envsubst '$${IMAGE}' < k8s/deployment.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -
+	kubectl apply -f k8s/service.yaml
+	@echo "Applying Ingress (host=$(HOST))"
+	@HOST="$(HOST)" envsubst '$${HOST}' < k8s/ingress.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -
+	kubectl -n $(NAMESPACE) rollout status deploy/endo-api
+
+.PHONY: undeploy
+undeploy:
+	@HOST="$(HOST)" envsubst '$${HOST}' < k8s/ingress.tmpl.yaml | kubectl -n $(NAMESPACE) delete -f - --ignore-not-found
+	kubectl -n $(NAMESPACE) delete -f k8s/service.yaml --ignore-not-found
+	kubectl -n $(NAMESPACE) delete deploy/endo-api --ignore-not-found
+	kubectl -n $(NAMESPACE) delete pvc/endo-api-data --ignore-not-found
+	kubectl -n $(NAMESPACE) delete secret/endo-api-secrets --ignore-not-found
+	kubectl -n $(NAMESPACE) delete configmap/endo-api-config --ignore-not-found
+
+.PHONY: logs
+logs:
+	kubectl -n $(NAMESPACE) logs -f deploy/endo-api
+
+.PHONY: status
+status:
+	kubectl -n $(NAMESPACE) get all
+	kubectl -n $(NAMESPACE) get ingress

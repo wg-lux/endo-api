@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Unified server startup script (DRY)
-# - Detects mode (prefers .mode, falls back to ENDO_API_MODE)
+# - Detects mode (prefers .mode, falls back to DJANGO_ENV)
 # - Ensures environment is initialized (.env, conf)
 # - Honors DJANGO_HOST/DJANGO_PORT at runtime to avoid rebuilds
 # - Starts appropriate server (daphne in prod if available, dev runserver otherwise)
 set -eo pipefail
 
-# Detect mode: prefer .mode, fallback to ENDO_API_MODE, default development
+# Detect env: prefer .mode, fallback to DJANGO_ENV, default development
 if [ -f .mode ] && MODE_FILE=$(cat .mode 2>/dev/null | tr -d '\n' | tr -d ' '); then
-  export ENDO_API_MODE=${MODE_FILE:-development}
+  export DJANGO_ENV=${MODE_FILE:-development}
 else
-  export ENDO_API_MODE=${ENDO_API_MODE:-development}
+  export DJANGO_ENV=${DJANGO_ENV:-development}
 fi
 
 # Runtime configuration (favor environment to avoid rebuilds)
@@ -19,7 +19,7 @@ PORT="${DJANGO_PORT:-8118}"
 DJANGO_MODULE_RUNTIME="${DJANGO_MODULE:-endo_api}"
 
 echo "🌟 Starting Endo API Server"
-echo "Mode: ${ENDO_API_MODE}"
+echo "Env: ${DJANGO_ENV}"
 echo "Host: ${HOST}"
 echo "Port: ${PORT}"
 echo ""
@@ -30,7 +30,6 @@ if [ ! -f ".env" ]; then
   if command -v manage >/dev/null 2>&1; then
     manage setup
   else
-    # Fallback: attempt direct setup pipeline
     if command -v uv >/dev/null 2>&1; then
       uv run python scripts/core/setup.py || true
       uv run python scripts/database/make_conf.py || true
@@ -61,10 +60,9 @@ run_daphne() {
   fi
 }
 
-if [ "$ENDO_API_MODE" = "production" ]; then
+if [ "$DJANGO_ENV" = "production" ]; then
   echo "🚀 Production pipeline: migrate, load base data, collectstatic"
   py manage.py migrate --noinput || { echo "❌ migrate failed"; exit 1; }
-  # Load base data if command exists
   if py manage.py help | grep -q "load_base_db_data"; then
     py manage.py load_base_db_data || echo "⚠️ load_base_db_data failed or skipped"
   fi

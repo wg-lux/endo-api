@@ -47,10 +47,6 @@ let
     inherit pkgs lib appConfig isDev; 
   };
   
-  containers = import ./containers.nix { 
-    inherit pkgs lib appConfig; 
-  };
-  
   environment = import ./environment.nix { 
     lxVars = lx_vars;
     inherit buildInputs pkgs lib isDev appConfig;
@@ -72,6 +68,5 @@ in
   
   services = services;
   processes = processes;
-  containers = containers;
   environment = environment;
 }

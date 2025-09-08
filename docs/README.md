@@ -2,13 +2,15 @@
 
 This directory contains comprehensive documentation for the Endo API project.
 
+**Dont forget to initialize submodules**
+
 ## 📚 Active Documentation
 
 ### User Guides
-- **[Centralized Configuration Guide](CENTRALIZED_CONFIG_GUIDE.md)** - Complete guide to the configuration system
-- **[Native DevEnv Containers Guide](NATIVE_DEVENV_CONTAINERS_GUIDE.md)** - Container usage and deployment
-- **[DevEnv Testing Framework](devenv-testing.md)** - Comprehensive testing system documentation
-- **[Luxnix Implementation Info](luxnix-implementation-info.md)** - Luxnix compatibility and deployment information
+- **[Centralized Configuration Guide](CENTRALIZED_CONFIG_GUIDE.md)**
+- **[Container Management (Docker/Podman)](CONTAINER_MANAGEMENT_GUIDE.md)**
+- **[DevEnv Testing Framework](devenv-testing.md)**
+- **[Luxnix Implementation Info](luxnix-implementation-info.md)**
 
 ### Main Documentation
 - **[README.md](../README.md)** - Primary project documentation with quick start guide
@@ -59,21 +61,17 @@ endo-api/
 
 ### ✅ Unified Management System
 - Single `manage` command interface
-- 87.5% code duplication reduction
-- Complete legacy script elimination
+- Container workflow migrated to Docker/Podman helpers
 
 ### ✅ Centralized Configuration
 - Single source of truth via `app_config.nix`
-- Zero configuration drift
-- Dynamic environment generation
+- Env-first production configuration (Kubernetes-ready)
 
 ### ✅ Modern DevOps Practices
-- Native DevEnv containers
-- Comprehensive testing framework with 6 test suites
-- Automated testing suites
-- CI/CD compatible workflows
+- DevEnv for local shell
+- Docker/Podman images for containers
 
 ---
 
-**Last Updated**: August 31, 2025  
+**Last Updated**: September 8, 2025  
 **Project Status**: Production Ready ✅

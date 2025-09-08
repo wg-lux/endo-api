@@ -3,8 +3,9 @@ from pathlib import Path
 
 from endoreg_db.utils.paths import STORAGE_DIR
 from endoreg_db.logger_conf import get_logging_config
-# from lx_annotate.settings.prod import X_FRAME_OPTIONS
 X_FRAME_OPTIONS = "SAMEORIGIN"
+
+from .env import debug_default  # new env helpers
 
 BASE_URL = os.environ.get("BASE_URL", "http://127.0.0.1:8000")
 
@@ -24,14 +25,14 @@ endoreg_db_dir = Path(os.environ.get("ENDOREG_DB_DIR", "./libs/endoreg-db")).res
 ASSET_DIR = endoreg_db_dir / "tests/assets"
 RUN_VIDEO_TESTS = os.environ.get("RUN_VIDEO_TESTS", "true").lower() == "true"
 
-DEBUG = os.environ.get("DJANGO_DEBUG", "False")  # Changed from True to False for production
-if DEBUG.lower() == "true":
-    DEBUG = True
-else:
-    DEBUG = False
+# DEBUG derived from env module (DJANGO_DEBUG or DJANGO_ENV)
+DEBUG = debug_default()
 
+# Base secret key remains lenient in base; prod enforces requirement
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "replace-this-with-a-secure-key")
-MODULE_NAME = os.environ.get("DJANGO_MODULE",)
+
+# Django module name with safe default
+MODULE_NAME = os.environ.get("DJANGO_MODULE", "endo_api")
 
 
 FILE_LOG_LEVEL = os.environ.get("FILE_LOG_LEVEL", "DEBUG").upper()

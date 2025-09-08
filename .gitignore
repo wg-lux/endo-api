@@ -1,3 +1,5 @@
+endo-api-*.tar
+
 # environment
 status-summary.json
 .env

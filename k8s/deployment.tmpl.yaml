@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: endo-api
+  namespace: endo-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: endo-api
+  template:
+    metadata:
+      labels:
+        app: endo-api
+    spec:
+      securityContext:
+        fsGroup: 10001
+      containers:
+        - name: api
+          image: ${IMAGE}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8118
+          envFrom:
+            - secretRef:
+                name: endo-api-secrets
+            - configMapRef:
+                name: endo-api-config
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8118
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8118
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: endo-api-data

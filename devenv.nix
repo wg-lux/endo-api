@@ -22,13 +22,6 @@ let
   port = let env = builtins.getEnv "DJANGO_PORT"; in if env != "" then env else appConfig.server.port;
   base_url = let env = builtins.getEnv "BASE_URL"; in if env != "" then env else "${http_protocol}://${host}:${port}";
 
-  # Development/Production mode detection
-  # Use environment variable with fallback to development mode
-  # This makes mode switching dynamic without requiring devenv rebuild
-  envMode = builtins.getEnv "ENDO_API_MODE";
-  detectedMode = if envMode == "production" then "production" else "development";
-  isDev = detectedMode != "production";
-
   # Pin to specific Python 3.12 version to match pyproject.toml
   python = pkgs.python312;
   uvPackage = pkgs.uv;
@@ -46,7 +39,7 @@ let
     confTemplateDir = confTemplateDir;
     homeDir = homeDir;
     uvPackage = uvPackage;
-    isDev = isDev;
+    isDev = true; # Mode is no longer controlled by Nix; derive at runtime via DJANGO_ENV
   };
 
   buildInputs = devenv_utils.buildInputs;
@@ -58,7 +51,6 @@ let
 
 in 
 {
-  # A dotenv file was found, while dotenv integration is currently not enabled.
   dotenv.enable = true;
   dotenv.disableHint = true;
   cachix.enable = true;
@@ -74,43 +66,14 @@ in
     cudaPackages.cuda_nvcc
   ] ++ runtimePackages;
 
-  # Use modular environment configuration
-  env = {
-    # LD_LIBRARY_PATH with OpenGL support (critical for CUDA)
-    LD_LIBRARY_PATH = "${
-      with pkgs;
-      lib.makeLibraryPath buildInputs
-    }:/run/opengl-driver/lib:/run/opengl-driver-32/lib";
-    
-    # PyTorch CUDA allocation configuration
-    PYTORCH_CUDA_ALLOC_CONF = "expandable_segments:True";
-    
-    # Mode indicator
-    ENDO_API_MODE = if isDev then "development" else "production";
-    
-    # Database configuration based on mode
-    DATABASE_ENGINE = if isDev then appConfig.database.dev.engine else appConfig.database.prod.engine;
-    DATABASE_NAME = if isDev then appConfig.database.dev.name else appConfig.database.prod.name;
-    DATABASE_HOST = if isDev then appConfig.database.dev.host else appConfig.database.prod.host;
-    DATABASE_PORT = if isDev then appConfig.database.dev.port else appConfig.database.prod.port;
-    DATABASE_USER = if isDev then appConfig.database.dev.user else appConfig.database.prod.user;
-    DATABASE_PASSWORD = if isDev then appConfig.database.dev.password else "";
-    
-    # Remove GPU visibility variables - they interfere with PyTorch CUDA detection
-    # NVIDIA_VISIBLE_DEVICES = "all";
-    # CUDA_VISIBLE_DEVICES = "all";
-  } // devenv_utils.lx_vars;
+  # Lean environment: no app mode or DB configuration here
+  env = { } // devenv_utils.lx_vars;
 
-  # Comprehensive testing using enterTest
   enterTest = ''
-    # Modern test framework using system-validation.sh
     TEST_SUITE_VAR="''${TEST_SUITE:-quick}"
     echo "🧪 Running DevEnv Test Suite: $TEST_SUITE_VAR"
     echo "========================================="
-    
-    # Track overall result
     test_result=0
-    
     case "$TEST_SUITE_VAR" in
       "quick"|"q")
         echo "🚀 Running quick validation tests..."
@@ -144,8 +107,6 @@ in
         exit 1
         ;;
     esac
-    
-    # Report final result
     if [ $test_result -eq 0 ]; then
         echo "✅ All tests in suite '$TEST_SUITE_VAR' passed!"
         exit 0
@@ -163,41 +124,16 @@ in
     };
   };
 
-  # Use modular scripts configuration  
   scripts = devenv_utils.scripts;
-
-  # Use modular tasks configuration
   tasks = devenv_utils.tasks;
-
-  # Use modular processes configuration
   processes = devenv_utils.processes;
-
-  # Use modular containers configuration
   containers = devenv_utils.containers;
-
-  # Use modular services configuration  
   services = devenv_utils.services;
 
   enterShell = ''
-    # Dynamic mode detection at shell entry
-    if [ -f ".mode" ]; then
-      MODE_FROM_FILE=$(cat .mode 2>/dev/null | tr -d '\n' | tr -d ' ')
-      if [ "$MODE_FROM_FILE" = "production" ]; then
-        export ENDO_API_MODE="production"
-      else
-        export ENDO_API_MODE="development"
-      fi
-    else
-      # Fallback to environment variable or default
-      export ENDO_API_MODE="''${ENDO_API_MODE:-development}"
-    fi
-
     echo "===== Endo API Development Environment ====="
-    if [ "$ENDO_API_MODE" = "production" ]; then
-      echo "Mode: Production (PostgreSQL)"
-    else
-      echo "Mode: Development (SQLite)"
-    fi
+    MODE_MSG=''${DJANGO_ENV:-development}
+    echo "Env: $MODE_MSG"
     echo "============================================="
     
     git submodule init
@@ -205,18 +141,14 @@ in
 
     export SYNC_CMD="uv sync"
 
-    # Ensure dependencies are synced using uv
-    # Check if venv exists. If not, run sync verbosely. If it exists, sync quietly.
     if [ ! -d ".devenv/state/venv" ]; then
        echo "Virtual environment not found. Running initial uv sync..."
        $SYNC_CMD || echo "Error: Initial uv sync failed. Please check network and pyproject.toml."
     else
-       # Sync quietly if venv exists
        echo "Syncing Python dependencies with uv..."
        $SYNC_CMD --quiet || echo "Warning: uv sync failed. Environment might be outdated."
     fi
 
-    # Activate Python virtual environment managed by uv
     ACTIVATED=false
     if [ -f ".devenv/state/venv/bin/activate" ]; then
       source .devenv/state/venv/bin/activate
@@ -232,20 +164,8 @@ in
       source .env
       set +a
       echo ".env file loaded successfully."
-    elif [ -f "local_settings.py" ]; then
-      echo "Detected luxnix managed environment - using system environment variables"
-      echo "No .env file needed"
     else
-      echo "Warning: .env file not found. Please run 'devenv task run env:build' to create it."
-    fi
-
-    # Dynamic mode messaging
-    if [ "$ENDO_API_MODE" = "production" ]; then
-      echo "Production mode: Expecting external PostgreSQL and Redis services"
-      echo "Ensure your database connection settings are properly configured"
-    else
-      echo "Development mode: SQLite database will be used"
-      echo "Local PostgreSQL service available via 'devenv up postgres'"
+      echo "Note: .env not found. Defaults apply."
     fi
 
     gpu-check

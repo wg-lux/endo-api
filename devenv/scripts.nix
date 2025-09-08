@@ -75,7 +75,7 @@ in
   # Service management (mode-aware)
   start-services.exec = ''
     # Runtime mode detection
-    if [ "$ENDO_API_MODE" = "production" ]; then
+    if [ "''${DJANGO_ENV:-development}" = "production" ]; then
       echo "Starting production environment..."
       echo "Note: External PostgreSQL and Redis services expected"
       devenv up django
@@ -87,7 +87,7 @@ in
 
   services-up.exec = ''
     # Runtime mode detection
-    if [ "$ENDO_API_MODE" = "production" ]; then
+    if [ "''${DJANGO_ENV:-development}" = "production" ]; then
       echo "Production mode: Services should be managed externally"
       echo "Expecting PostgreSQL on external host"
       echo "Expecting Redis on external host"
@@ -111,7 +111,7 @@ in
 
   # Database management
   db-shell.exec = ''
-    if [ "$ENDO_API_MODE" = "production" ]; then
+    if [ "''${DJANGO_ENV:-development}" = "production" ]; then
       echo "Production mode: Use external database tools"
       echo "Example: psql -h <DB_HOST> -p <DB_PORT> -U <DB_USER> -d <DB_NAME>"
     else

@@ -8,7 +8,7 @@ A sophisticated Django application for endoscopy data processing and management,
 ### Prerequisites
 - **Nix** with flakes support
 - **direnv** for automatic environment loading
-- **Docker** (optional, for containers)
+- **Docker or Podman** for containers
 
 ### 1. Initialize Environment
 ```bash
@@ -30,7 +30,7 @@ devenv up                      # Start Django server
 manage prod                    # Switch to production mode
 manage deploy                  # Complete deployment pipeline
 # Or use containers:
-manage build && manage copy && manage run     # Build, copy to runtime, and run production container
+manage docker-prod-build && manage docker-prod-run
 ```
 
 ## 🎯 Key Features
@@ -41,14 +41,14 @@ manage build && manage copy && manage run     # Build, copy to runtime, and run 
 - **Zero Configuration Drift**: Centralized settings via `app_config.nix`
 
 ### ✅ **Modern DevEnv Integration**
-- **Native DevEnv Containers**: Full container support with caching
+- **DevEnv shell for local development**: Reproducible environment via Nix
 - **Automatic Environment**: Shell loads with all dependencies ready
 - **CUDA Support**: GPU acceleration for ML workloads
 
 ### ✅ **Streamlined Development**
 - **Development**: SQLite + Django dev server
 - **Production**: PostgreSQL + Daphne ASGI server
-- **Containers**: Docker/Podman with DevEnv integration
+- **Containers**: Standard Docker/Podman images with env-first overrides
 
 ### ✅ **Enterprise Ready**
 - **Luxnix Compatibility**: Automatic coordination node configuration
@@ -60,7 +60,7 @@ manage build && manage copy && manage run     # Build, copy to runtime, and run 
 ### Core Commands
 ```bash
 manage help                    # Show all available commands
-manage status                  # Show current configuration and running containers
+manage status                  # Show current configuration
 manage setup                   # Complete environment and dependency setup
 ```
 
@@ -70,14 +70,15 @@ manage dev                     # Switch to development mode (SQLite)
 manage prod                    # Switch to production mode (PostgreSQL)
 ```
 
-### Container Operations
+### Container Operations (Docker/Podman)
 ```bash
-manage build                   # Build container for current mode
-manage copy                    # Copy built image to Docker/Podman runtime
-manage run                     # Run container for current mode
-manage stop                    # Stop all running containers
-manage restart                 # Restart containers
-manage clean                   # Clean up containers and images
+manage docker-dev-build        # Build development image
+manage docker-dev-run          # Run development container
+manage docker-prod-build       # Build production image
+manage docker-prod-run         # Run production container
+manage docker-logs [dev|prod]  # Tail container logs
+manage docker-stop             # Stop containers (dev and prod)
+manage docker-clean            # Remove images and containers
 ```
 
 ### Deployment
@@ -96,12 +97,6 @@ bash scripts/core/system-validation.sh --json-only
 # Fast validation (skip slow container builds)
 bash scripts/core/system-validation.sh --skip-containers
 
-# Force rebuild containers (for fresh validation)
-bash scripts/core/system-validation.sh --force-rebuild
-
-# Verbose mode (show full build output)
-bash scripts/core/system-validation.sh --verbose
-
 # View detailed system status
 cat status-summary.json | jq '.summary'
 ```
@@ -115,10 +110,7 @@ The application includes comprehensive system validation with JSON reporting:
 - **Environment**: Tests unified environment management
 - **Database**: Validates connectivity and configuration
 - **CUDA/GPU**: Hardware compatibility testing
-- **Containers**: Automated build and run validation with smart caching
-- **Legacy Compatibility**: Backwards compatibility verification
-
-**Container Optimization**: Uses cached validation containers (`endo-api-dev-test:validation`, `endo-api-prod-test:validation`) to speed up repeated validations. Only rebuilds when containers don't exist or `--force-rebuild` is specified.
+- **Containers**: Build and run checks for dev/prod Docker/Podman images
 
 ### Usage Examples
 ```bash
@@ -132,49 +124,24 @@ bash scripts/core/system-validation.sh --json-only
 cat status-summary.json | jq '.tests | to_entries[] | select(.value.result == "FAIL")'
 ```
 
-### JSON Output Structure
-```json
-{
-  "timestamp": "2025-01-XX",
-  "validation_port": 10123,
-  "summary": {
-    "total_tests": 12,
-    "passed": 10,
-    "warnings": 2,
-    "failed": 0
-  },
-  "tests": {
-    "file_structure": {"result": "PASS", "message": "All required files present"},
-    "container_dev_build": {"result": "PASS", "message": "Dev container builds successfully"},
-    "environment_config": {"result": "PASS", "message": "Environment management working"}
-  },
-  "environment": {
-    "devenv_active": true,
-    "django_settings": "endo_api.settings_prod",
-    "endo_api_mode": "production"
-  }
-}
-```
-
-## � Secret Management
+## 🔐 Secret Management
 
 **Security-First Approach**: Secrets are never baked into the Nix store or committed to version control.
 
 ### Database Passwords
 - **Development**: SQLite requires no password
-- **Production**: Password stored in `conf/db_pwd` (auto-generated during setup)
-- **Containers**: Mount `conf/` directory as volume for secure access
+- **Production**: Provide via environment variables
+- **Containers**: No credentials baked into images
 
 ### Environment Variables
 ```bash
-# Secrets are read from environment or external files at runtime
-DATABASE_PASSWORD=""              # Always empty in Nix configuration
+# Secrets are read from environment at runtime
 DJANGO_SECRET_KEY=""             # Set via .env or environment
 ```
 
 ### Best Practices
 - All secret files are in `.gitignore` (`.env`, `.secrets`, `conf/`)
-- Use `manage setup` to generate secure default passwords
+- Use `manage setup` to generate defaults
 - Override defaults with environment variables in production
 - Never hardcode secrets in `app_config.nix` or other Nix files
 
@@ -186,7 +153,35 @@ DJANGO_SECRET_KEY=""             # Set via .env or environment
 conf/                 # Configuration directory (contains db_pwd)
 ```
 
-## �🚀 Common Workflows
+## 🔐 Production configuration (env-first)
+
+- Required: `DJANGO_SECRET_KEY`
+- Database priority:
+  1) `DATABASE_URL` (e.g. `postgresql://user:pass@host:5432/db`)
+  2) `DB_ENGINE`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`
+- Optional security flags: `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_SECURE_SSL_REDIRECT`, `DJANGO_SESSION_COOKIE_SECURE`, `DJANGO_CSRF_COOKIE_SECURE`
+- Optional DB SSL via env:
+  - `DJANGO_DB_OPTIONS` (JSON) takes precedence
+  - Or `DB_SSLMODE`, `DB_SSLROOTCERT`/`DB_SSLROOTCERT_B64`, `DB_SSLCERT`/`DB_SSLCERT_B64`, `DB_SSLKEY`/`DB_SSLKEY_B64`
+
+Kubernetes example (Secrets/ConfigMaps)
+```yaml
+env:
+  - name: DJANGO_ENV
+    value: "production"
+  - name: DJANGO_SECRET_KEY
+    valueFrom:
+      secretKeyRef: { name: endo-api, key: django-secret-key }
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef: { name: endo-api-db, key: url }
+  - name: DJANGO_ALLOWED_HOSTS
+    value: "api.example.com"
+  - name: DJANGO_DEBUG
+    value: "false"
+```
+
+## 🧭 Common Workflows
 
 ### Quick Development Setup
 ```bash
@@ -197,7 +192,7 @@ manage dev && manage setup && devenv up
 ### Container Development
 ```bash
 # Build and run development container
-manage dev && manage build && manage copy && manage run
+manage docker-dev-build && manage docker-dev-run
 ```
 
 ### Production Deployment
@@ -209,7 +204,7 @@ manage prod && manage deploy
 ### Production Containers
 ```bash
 # Build and run production containers
-manage prod && manage build && manage copy && manage run
+manage prod && manage docker-prod-build && manage docker-prod-run
 ```
 
 ### System Health Check
@@ -266,21 +261,21 @@ The application operates in two primary modes that automatically configure all c
 ### Scripts Organization
 ```
 scripts/
-├── README.md                   # � Comprehensive usage guide
+├── README.md                   # 📘 Comprehensive usage guide
 ├── core/                       # 🎯 Essential operations
 │   ├── environment.py          # Environment configuration
 │   ├── setup.py               # Initial environment setup
 │   └── system-validation.sh   # System validation with JSON output
-├── database/                   # �️ Database utilities
+├── database/                   # 🗄️ Database utilities
 │   ├── ensure_psql.py          # PostgreSQL setup
 │   ├── fetch_db_pwd_file.py   # Password management
 │   └── make_conf.py           # Configuration generation
-├── utilities/                  # � General utilities
+├── utilities/                  # 🛠️ General utilities
 │   ├── gpu-check.py           # GPU diagnostics
 │   └── test_luxnix_compatibility.py # Compatibility testing
-├── cuda/                      # � CUDA diagnostics
+├── cuda/                      # ⚙️ CUDA diagnostics
 │   └── [Specialized CUDA tools]
-└── archive/                   # � Legacy/completed scripts
+└── archive/                   # 🗃️ Legacy/completed scripts
     └── [Historical implementations]
 ```
 
@@ -303,7 +298,6 @@ endo-api/
 devenv/
 ├── management.nix              # 🎯 Unified management system
 ├── scripts.nix                # 🔄 Core DevEnv scripts
-├── containers.nix              # 🐳 Container definitions
 ├── environment.nix             # 🌍 Environment variables
 ├── build_inputs.nix            # 📚 System dependencies
 └── runtime_packages.nix        # 🏃 Runtime packages
@@ -347,18 +341,18 @@ To customize the application:
 
 1. **Edit Configuration**: Modify `app_config.nix`
 2. **Reload Environment**: `direnv reload`
-3. **Rebuild if Needed**: `manage build` (for containers)
+3. **Rebuild if Needed**: `manage docker-*-build` (for containers)
 
 ### Environment Variables
 The system supports environment variable overrides:
 
 ```bash
 export DJANGO_PORT=8080         # Override default port
-export ENDO_API_MODE=production # Override mode
+export DJANGO_ENV=production    # Override mode
 manage status                   # Verify changes
 ```
 
 ---
 
 *Last updated: September 2025*  
-*System Version: DevEnv Unified Management v2.0*
+*System Version: DevEnv Unified Management v2.1 (Docker/Podman)*

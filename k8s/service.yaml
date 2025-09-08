@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: endo-api
+  namespace: endo-api
+spec:
+  type: ClusterIP
+  selector:
+    app: endo-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8118

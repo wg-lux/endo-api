@@ -1,10 +1,12 @@
 # Docker ignore file to reduce build context and improve build speed
+endo-api-*.tar
 
 # Git and version control
 .git
 .gitignore
 .gitmodules
 .gitattributes
+
 
 # Python cache and virtual environments
 __pycache__/
