@@ -16,6 +16,8 @@ let
     "-e DJANGO_HOST=${appConfig.server.containerHost}"
     "-e DJANGO_PORT=${appConfig.server.port}"
     "-e DJANGO_MODULE=${appConfig.app.djangoModule}"
+    "-e DB_CONFIG_FILE=/app/${appConfig.paths.conf}/db.yaml"
+    # Do NOT mount whole workspace to avoid permission issues
     "-v $(pwd)/${appConfig.paths.data}:/app/${appConfig.paths.data}"
     "-v $(pwd)/${appConfig.paths.conf}:/app/${appConfig.paths.conf}"
     "-v $(pwd)/staticfiles:/app/staticfiles"
@@ -165,7 +167,7 @@ else:
             echo "Container specification: $SPEC_PATH"
             echo ""
             echo "Next steps:"
-            echo "  1. Run 'manage copy' to copy to container runtime"
+            echo "  1. Run 'manage copy' to load into your local container runtime"
             echo "  2. Run 'manage run' to start the container"
           else
             echo "⚠️  Container built but couldn't find specification path"
@@ -186,7 +188,7 @@ else:
     "container:copy" = {
       description = "Copy DevEnv container to container runtime (Docker/Podman)";
       exec = ''
-        echo "📦 Copying DevEnv container to container runtime..."
+        echo "📦 Loading DevEnv container image into local container runtime..."
         
         MODE_SUFFIX=$([[ "$ENDO_API_MODE" == "production" ]] && echo "prod" || echo "dev")
         
@@ -203,11 +205,16 @@ else:
           exit 1
         fi
         
-        echo "⏱️  Copying container to $CONTAINER_RUNTIME (this may take several minutes)..."
+        # Choose correct local transport for skopeo via devenv container copy
+        if [ "$CONTAINER_RUNTIME" = "podman" ]; then
+          REGISTRY_TRANSPORT="containers-storage:"
+        else
+          REGISTRY_TRANSPORT="docker-daemon://"
+        fi
         
-        # Copy with timeout - this can take a long time for large images
-        if timeout 900 devenv container copy "$MODE_SUFFIX" 2>/dev/null; then
-          echo "✅ Container copied to $CONTAINER_RUNTIME successfully"
+        echo "⏱️  Importing image into $CONTAINER_RUNTIME (this may take several minutes)..."
+        if timeout 900 devenv container --registry "$REGISTRY_TRANSPORT" copy "$MODE_SUFFIX"; then
+          echo "✅ Image loaded into $CONTAINER_RUNTIME successfully"
           
           # Verify the image exists
           IMAGE_NAME="endo-api-$MODE_SUFFIX"
@@ -215,20 +222,20 @@ else:
             echo "✅ Container image verified: $IMAGE_NAME:latest"
             echo ""
             echo "Available container images:"
-            $CONTAINER_RUNTIME images | grep endo-api | head -5
+            $CONTAINER_RUNTIME images | grep endo-api | head -5 || true
             echo ""
             echo "Ready to run! Use 'manage run' to start the container"
           else
-            echo "⚠️  Container copy completed but image not found in $CONTAINER_RUNTIME"
+            echo "⚠️  Import completed but image not listed by $CONTAINER_RUNTIME"
           fi
         else
           COPY_EXIT_CODE=$?
           if [ $COPY_EXIT_CODE -eq 124 ]; then
             echo "❌ Container copy timed out (15 minutes)"
           else  
-            echo "❌ Failed to copy container to $CONTAINER_RUNTIME"
+            echo "❌ Failed to load image into $CONTAINER_RUNTIME"
           fi
-          echo "You can still use 'devenv container run $MODE_SUFFIX' directly"
+          echo "You can still use 'devenv container run $MODE_SUFFIX' directly (uses Docker CLI)"
           exit 1
         fi
       '';
@@ -273,7 +280,7 @@ else:
           echo ""
           echo "Please run the following commands first:"
           echo "  1. manage build           # Build the DevEnv container"
-          echo "  2. manage copy            # Copy to $CONTAINER_RUNTIME"
+          echo "  2. manage copy            # Load into $CONTAINER_RUNTIME"
           echo "  3. manage run             # Start the container"
           exit 1
         fi
@@ -593,8 +600,21 @@ else:
           echo "Port: ${appConfig.server.port}"
           echo "Host: ${appConfig.server.host}"
           echo ""
-          echo "Running Containers:"
-          docker ps --filter "name=${appConfig.app.name}" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+          # Detect container runtime for status output
+          CONTAINER_RUNTIME=""
+          if command -v podman >/dev/null 2>&1; then
+            CONTAINER_RUNTIME="podman"
+          elif command -v docker >/dev/null 2>&1; then
+            CONTAINER_RUNTIME="docker"
+          fi
+
+          if [ -n "$CONTAINER_RUNTIME" ]; then
+            echo "Running Containers ($CONTAINER_RUNTIME):"
+            $CONTAINER_RUNTIME ps --filter "name=${appConfig.app.name}" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" || true
+          else
+            echo "Running Containers:"
+            echo "(no container runtime available)"
+          fi
           ;;
         "help"|*)
           echo "Endo API Management Commands"
@@ -607,7 +627,7 @@ else:
           echo ""
           echo "Containers:"  
           echo "  manage build     - Build container for current mode"
-          echo "  manage copy      - Copy container to runtime (Docker/Podman)"
+          echo "  manage copy      - Load container image into local engine"
           echo "  manage run       - Run container for current mode"
           echo "  manage stop      - Stop all containers"
           echo "  manage restart   - Restart containers"
@@ -634,44 +654,17 @@ else:
 
     # Server management (mode-aware)
     "run-server".exec = ''
-      # Load mode
-      export ENDO_API_MODE=$(cat .mode 2>/dev/null || echo 'development')
-      
-      # Runtime configuration
-      RUNTIME_HOST=''${DJANGO_HOST:-${appConfig.server.host}}
-      RUNTIME_PORT=''${DJANGO_PORT:-${appConfig.server.port}}
-      
-      echo "🌟 Starting Endo API Server"
-      echo "Mode: $ENDO_API_MODE"
-      echo "Host: $RUNTIME_HOST"
-      echo "Port: $RUNTIME_PORT"
-      echo ""
-      
-      # Ensure environment is ready
-      if [ ! -f ".env" ]; then
-        echo "📝 Environment file missing, setting up..."
-        devenv tasks run env:setup
-      fi
-      
-      # Run deployment pipeline if needed
-      if [ "$ENDO_API_MODE" = "production" ]; then
-        echo "🚀 Running deployment pipeline..."
-        devenv tasks run deploy:full
-        # Production server
-        ${pkgs.uv}/bin/uv run daphne ${appConfig.app.djangoModule}.asgi:application -b $RUNTIME_HOST -p $RUNTIME_PORT
-      else
-        # Development server
-        echo "🛠️  Running development server..."
-        devenv tasks run db:migrate
-        ${pkgs.uv}/bin/uv run python manage.py runserver $RUNTIME_HOST:$RUNTIME_PORT
-      fi
+      export DJANGO_HOST="''${DJANGO_HOST:-${appConfig.server.host}}"
+      export DJANGO_PORT="''${DJANGO_PORT:-${appConfig.server.port}}"
+      bash scripts/core/server-run.sh
     '';
 
     # Container server (for use inside containers)
     "run-server-container".exec = ''
       export DJANGO_HOST=${appConfig.server.containerHost}
       export ENDO_API_MODE=''${ENDO_API_MODE:-development}
-      run-server
+      # Use absolute path inside image where repo is copied to /
+      bash /scripts/core/server-run.sh
     '';
 
     # GPU diagnostics

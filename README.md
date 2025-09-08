@@ -30,7 +30,7 @@ devenv up                      # Start Django server
 manage prod                    # Switch to production mode
 manage deploy                  # Complete deployment pipeline
 # Or use containers:
-manage build && manage run     # Build and run production container
+manage build && manage copy && manage run     # Build, copy to runtime, and run production container
 ```
 
 ## 🎯 Key Features
@@ -73,6 +73,7 @@ manage prod                    # Switch to production mode (PostgreSQL)
 ### Container Operations
 ```bash
 manage build                   # Build container for current mode
+manage copy                    # Copy built image to Docker/Podman runtime
 manage run                     # Run container for current mode
 manage stop                    # Stop all running containers
 manage restart                 # Restart containers
@@ -196,7 +197,7 @@ manage dev && manage setup && devenv up
 ### Container Development
 ```bash
 # Build and run development container
-manage dev && manage build && manage run
+manage dev && manage build && manage copy && manage run
 ```
 
 ### Production Deployment
@@ -208,7 +209,7 @@ manage prod && manage deploy
 ### Production Containers
 ```bash
 # Build and run production containers
-manage prod && manage build && manage run
+manage prod && manage build && manage copy && manage run
 ```
 
 ### System Health Check
@@ -357,193 +358,7 @@ export ENDO_API_MODE=production # Override mode
 manage status                   # Verify changes
 ```
 
-## 🐳 Container Support
-
-### Native DevEnv Containers
-Built-in container support with DevEnv integration:
-
-```bash
-# Development container
-manage dev && manage build      # Build development image
-manage run                      # Run development container
-
-# Production container  
-manage prod && manage build     # Build production image
-manage run                      # Run production container
-```
-
-### Container Features
-- **Fast Builds**: Multi-layer caching with Nix
-- **Consistent Environments**: Same Nix packages in containers and shells
-- **GPU Support**: CUDA acceleration when available
-- **Volume Management**: Automatic data and config volume mounting
-
-### Docker Compose Alternative
-For those preferring docker-compose workflows:
-
-```bash
-# Traditional approach still supported
-docker-compose up               # Uses generated configurations
-```
-
-## 🛠️ Development
-
-### Local Development
-```bash
-manage dev                      # Set development mode
-devenv shell                    # Enter development shell
-run-server                      # Start Django development server
-```
-
-### Database Management
-```bash
-# Development (SQLite)
-devenv tasks run db:migrate     # Run migrations
-devenv tasks run db:load-data   # Load sample data
-
-# Production (PostgreSQL) - requires external database
-manage prod                     # Switch to production mode
-manage deploy                   # Run full deployment pipeline
-```
-
-### Testing
-```bash
-# Run tests
-python manage.py test
-
-# GPU testing
-gpu-check                       # Check CUDA availability
-```
-
-## 🚀 Deployment
-
-### Production Deployment
-```bash
-manage prod                     # Switch to production mode
-manage deploy                   # Full deployment pipeline
-```
-
-The deployment pipeline includes:
-1. Database migrations
-2. Static file collection
-3. Base data loading
-4. Service startup
-
-### Container Deployment
-```bash
-manage prod                     # Switch to production mode
-manage build                    # Build production container
-manage run                      # Deploy container
-manage status                   # Verify deployment
-```
-
-### Luxnix Managed Deployment
-For luxnix-managed environments, deployment is automatic:
-
-- **Detection**: Automatically detects luxnix environment
-- **Configuration**: Uses `local_settings.py` when available
-- **Secrets**: Integrates with luxnix vault system
-- **Central Nodes**: Supports coordination node setup
-
-## 🚨 Troubleshooting
-
-### Common Issues
-
-#### Environment Setup Problems
-```bash
-# Check environment status
-python scripts/core/environment.py --status
-
-# Reset environment
-python scripts/core/environment.py --clean
-python scripts/core/setup.py
-```
-
-#### Container Build Failures
-```bash
-# Check container logs
-manage logs
-
-# Clean rebuild
-docker system prune -a
-manage build
-```
-
-#### Database Connection Issues
-```bash
-# Check database configuration
-manage db-shell
-bash scripts/database/postgres-check.py
-
-# Reset database
-manage migrate-reset
-```
-
-#### CUDA/GPU Problems
-```bash
-# Run comprehensive GPU diagnostics
-python scripts/cuda/gpu-check.py
-python test_cuda_detailed.py
-```
-
-#### Service Startup Issues
-```bash
-# Check service status
-services-logs
-
-# Restart services
-services-down && services-up
-```
-
-### Getting Help
-
-1. **Check validation report**: Run `bash scripts/core/system-validation.sh` to get comprehensive system status
-2. **Review logs**: Use `manage logs` or `services-logs` to examine service output
-3. **Verify environment**: Ensure `devenv shell` is active and mode is set correctly
-4. **Check documentation**: Refer to `docs/` for detailed implementation guides
-
-### Performance Optimization
-
-- Use `manage prod` for production workloads
-- Container builds are cached - use `manage build --no-cache` only when needed
-- Database operations are optimized for the configured mode
-- GPU acceleration is automatically detected and used when available
-
-## 📚 Documentation
-
-- **[Centralized Configuration Guide](docs/CENTRALIZED_CONFIG_GUIDE.md)**: Comprehensive configuration management
-- **[DevEnv Testing](docs/devenv-testing.md)**: Testing and validation procedures
-- **[Container Guide](docs/NATIVE_DEVENV_CONTAINERS_GUIDE.md)**: Container integration documentation
-- **[Implementation Reports](docs/implementation-reports/)**: Technical implementation details
-
-## 🤝 Contributing
-
-1. **Development Setup**:
-   ```bash
-   manage dev
-   python scripts/core/setup.py
-   devenv up
-   ```
-
-2. **Testing Changes**:
-   ```bash
-   bash scripts/core/system-validation.sh
-   python tests/test_*.py
-   ```
-
-3. **Container Validation**:
-   ```bash
-   manage build
-   manage run
-   ```
-
-4. **Code Standards**: Follow the established patterns in `scripts/core/` for new functionality.
-
-## 📄 License
-
-This project is licensed under the terms specified in the [LICENSE](LICENSE) file.
-
 ---
 
-*Last updated: January 2025*  
+*Last updated: September 2025*  
 *System Version: DevEnv Unified Management v2.0*

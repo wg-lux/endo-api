@@ -14,42 +14,10 @@ let
     serverHost = if containerMode then appConfig.server.containerHost else if isDev then host else appConfig.server.containerHost;
     hostText = if containerMode then "containerized server" else "server";
   in ''
-    env-pipe
-    
-    # Runtime port and host detection (override build-time values) - using centralized config
-    RUNTIME_HOST=''${DJANGO_HOST:-${if containerMode then appConfig.server.containerHost else host}}
-    RUNTIME_PORT=''${DJANGO_PORT:-${port}}
-    
-    # Runtime mode detection
-    if [ "$ENDO_API_MODE" = "production" ]; then
-      # Production mode
-      # Detect if running in luxnix environment and use appropriate settings
-      if [ "$CENTRAL_NODE" = "true" ]; then
-        echo "Running as central node"
-        set-central-settings
-      else
-        set-prod-settings
-      fi
-      echo "Starting ${hostText} in Production mode (PostgreSQL)"
-      echo "Host: ${if containerMode then appConfig.server.containerHost else appConfig.server.host}"
-      echo "Port: $RUNTIME_PORT"
-      echo "Expecting external PostgreSQL and Redis services"
-
-      # print settings module and other important variables for transparency
-      echo "DJANGO_SETTINGS_MODULE: $DJANGO_SETTINGS_MODULE"
-      echo "BASE_URL: $BASE_URL"
-
-      deploy-pipe
-      ${pkgs.uv}/bin/uv run daphne ${djangoModuleName}.asgi:application -b ${if containerMode then appConfig.server.containerHost else "$RUNTIME_HOST"} -p $RUNTIME_PORT
-    else
-      # Development mode
-      set-dev-settings
-      echo "Starting ${hostText} in Development mode (SQLite)"
-      echo "Host: ${if containerMode then appConfig.server.containerHost else "$RUNTIME_HOST"}"
-      echo "Port: $RUNTIME_PORT"
-      deploy-pipe
-      ${pkgs.uv}/bin/uv run python manage.py runserver ${if containerMode then appConfig.server.containerHost else "$RUNTIME_HOST"}:$RUNTIME_PORT
-    fi
+    # Use unified server script (DRY) and honor runtime env for host/port
+    export DJANGO_HOST="''${DJANGO_HOST:-${if containerMode then appConfig.server.containerHost else host}}"
+    export DJANGO_PORT="''${DJANGO_PORT:-${port}}"
+    bash scripts/core/server-run.sh
   '';
 in
 {

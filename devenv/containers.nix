@@ -9,11 +9,8 @@
   "dev" = {
     name = "endo-api-dev";
     startupCommand = "run-server-container";
-    # Copy the entire project to the container
-    copyToRoot = pkgs.buildEnv {
-      name = "endo-api-dev-root";
-      paths = [ ];
-    };
+    # Include repo in container root so scripts exist without mounting
+    copyToRoot = ./.;
   };
 
   # Production container - optimized runtime with minimal dependencies  
@@ -21,11 +18,7 @@
   "prod" = {
     name = "endo-api-prod";
     startupCommand = "run-server-container";
-    # Only include essential runtime files
-    copyToRoot = pkgs.buildEnv {
-      name = "endo-api-prod-root";
-      paths = [ ];
-    };
+    copyToRoot = ./.;
   };
 
   # Processes container - for running background processes
@@ -33,9 +26,6 @@
   "processes" = {
     name = "endo-api-processes";
     startupCommand = "run-server";
-    copyToRoot = pkgs.buildEnv {
-      name = "endo-api-processes-root";
-      paths = [ ];
-    };
+    copyToRoot = ./.;
   };
 }
