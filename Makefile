@@ -4,6 +4,10 @@
 # - containerd (ctr) available (RKE2)
 # - kubectl configured (export KUBECONFIG=/etc/rancher/rke2/rke2.yaml)
 
+# Force bash (dash lacks -o pipefail) to avoid /bin/sh errors
+SHELL := /usr/bin/env bash
+.SHELLFLAGS := -eu -o pipefail -c
+
 VERSION       ?= 1.0.0
 IMAGE_NAME    ?= endo-api
 IMG          ?= $(IMAGE_NAME):$(VERSION)
@@ -14,12 +18,15 @@ ENGINE       ?= $(shell command -v podman >/dev/null 2>&1 && echo podman || (com
 CTR_NS        ?= k8s.io
 IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 
-.SHELLFLAGS := -eu -o pipefail -c
+# Build configuration
+DOCKER_BUILDKIT ?= 0          # Default off (was causing stack smash); override with DOCKER_BUILDKIT=1 make build
+BUILD_ARGS      ?=            # Extra args e.g. BUILD_ARGS="--no-cache"
 
 .PHONY: help
 help:
 	@echo "Targets:"
 	@echo "  build           - Build production image ($(IMG))"
+	@echo "                   (ENGINE=$(ENGINE) DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) BUILD_ARGS='$(BUILD_ARGS)')"
 	@echo "  save            - Save image to tar ($(IMAGE_TAR))"
 	@echo "  load            - Load image into containerd (sudo ctr -n $(CTR_NS) images import)"
 	@echo "  k8s-namespace   - Create namespace ($(NAMESPACE))"
@@ -33,7 +40,8 @@ help:
 .PHONY: build
 build:
 	@if [ -z "$(ENGINE)" ]; then echo "No container engine (podman|docker) found"; exit 1; fi
-	$(ENGINE) build -t $(IMG) -f container/Dockerfile.prod .
+	@echo "Building image $(IMG) with $(ENGINE) (DOCKER_BUILDKIT=$(DOCKER_BUILDKIT))"
+	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) $(ENGINE) build $(BUILD_ARGS) -t $(IMG) -f container/Dockerfile.prod .
 
 .PHONY: save
 save:
