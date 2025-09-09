@@ -18,6 +18,15 @@ ENGINE       ?= $(shell command -v podman >/dev/null 2>&1 && echo podman || (com
 CTR_NS        ?= k8s.io
 IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 
+# Optional local/regional registry support
+# Set REGISTRY (host:port) explicitly or auto-detect a Service named 'registry'
+REGISTRY       ?=
+REGISTRY_PORT  ?= 5000
+REGISTRY_DETECTED := $(shell kubectl get svc -A -o jsonpath='{range .items[?(@.metadata.name=="registry")]}{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{(index .spec.ports 0).port}{"\n"}{end}' 2>/dev/null | head -1)
+REGISTRY_EFFECTIVE := $(if $(strip $(REGISTRY)),$(REGISTRY),$(REGISTRY_DETECTED))
+# Fully qualified image (priority: detected/explicit registry -> docker hub library)
+IMAGE_FQN := $(if $(strip $(REGISTRY_EFFECTIVE)),$(REGISTRY_EFFECTIVE)/$(IMAGE_NAME):$(VERSION),docker.io/library/$(IMAGE_NAME):$(VERSION))
+
 # Build configuration
 DOCKER_BUILDKIT ?= 0          # Default off (was causing stack smash); override with DOCKER_BUILDKIT=1 make build
 BUILD_ARGS      ?=            # Extra args e.g. BUILD_ARGS="--no-cache"
@@ -40,8 +49,15 @@ help:
 .PHONY: build
 build:
 	@if [ -z "$(ENGINE)" ]; then echo "No container engine (podman|docker) found"; exit 1; fi
-	@echo "Building image $(IMG) with $(ENGINE) (DOCKER_BUILDKIT=$(DOCKER_BUILDKIT))"
+	@echo "Building image $(IMG) (base tag) with $(ENGINE) (DOCKER_BUILDKIT=$(DOCKER_BUILDKIT))"
 	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) $(ENGINE) build $(BUILD_ARGS) -t $(IMG) -f container/Dockerfile.prod .
+	@if [ -n "$(strip $(REGISTRY_EFFECTIVE))" ]; then \
+	  echo "Tagging & pushing to registry: $(IMAGE_FQN)"; \
+	  $(ENGINE) tag $(IMG) $(IMAGE_FQN); \
+	  $(ENGINE) push $(IMAGE_FQN) || { echo 'Push failed (continuing)'; }; \
+	else \
+	  echo "No registry detected (REGISTRY/Service 'registry'). Using local import workflow."; \
+	fi
 
 .PHONY: save
 save:
@@ -95,8 +111,8 @@ k8s-secrets: k8s-namespace
 .PHONY: deploy
 deploy: k8s-namespace k8s-config k8s-secrets
 	kubectl apply -f k8s/pvc.yaml
-	@echo "Applying Deployment (image=$(IMG))"
-	@IMAGE="$(IMG)" envsubst '$${IMAGE}' < k8s/deployment.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -
+	@echo "Applying Deployment (preferred image=$(IMAGE_FQN))"
+	@IMAGE="$(IMAGE_FQN)" envsubst '$${IMAGE}' < k8s/deployment.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -
 	kubectl apply -f k8s/service.yaml
 	@echo "Applying Ingress (host=$(HOST))"
 	@HOST="$(HOST)" envsubst '$${HOST}' < k8s/ingress.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -
@@ -119,3 +135,10 @@ logs:
 status:
 	kubectl -n $(NAMESPACE) get all
 	kubectl -n $(NAMESPACE) get ingress
+
+# Helper: show resolved image refs
+.PHONY: image-info
+image-info:
+	@echo "Base tag: $(IMG)"; \
+	 echo "Registry effective: $(REGISTRY_EFFECTIVE)"; \
+	 echo "Image FQN: $(IMAGE_FQN)";
