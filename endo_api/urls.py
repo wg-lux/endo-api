@@ -16,7 +16,14 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
+from django.http import JsonResponse
+
+# Simple health view for k8s probes
+def health(request):  # noqa: D401
+    return JsonResponse({"status": "ok"}, status=200)
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path("admin/", admin.site.urls),
+    path("", health, name="root-health"),          # root (legacy probe)
+    path("healthz/", health, name="healthz"),      # explicit health path
 ]
