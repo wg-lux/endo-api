@@ -38,10 +38,11 @@ help:
 	@echo "                   (ENGINE=$(ENGINE) DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) BUILD_ARGS='$(BUILD_ARGS)')"
 	@echo "  save            - Save image to tar ($(IMAGE_TAR))"
 	@echo "  load            - Load image into containerd (sudo ctr -n $(CTR_NS) images import)"
+	@echo "  assert-image    - Ensure image is present locally when no registry is used"
 	@echo "  k8s-namespace   - Create namespace ($(NAMESPACE))"
 	@echo "  k8s-config      - Create/Update ConfigMap (non-secrets)"
 	@echo "  k8s-secrets     - Create/Update Secret from env (DJANGO_SECRET_KEY, DATABASE_URL or DB_*)"
-	@echo "  deploy          - Apply PVC, Deployment, Service, Ingress"
+	@echo "  deploy          - Apply PVC, Deployment, Service, Ingress (verifies image present if no registry)"
 	@echo "  undeploy        - Delete resources (keeps namespace)"
 	@echo "  logs            - Tail logs"
 	@echo "  status          - Show objects/status"
@@ -108,8 +109,22 @@ k8s-secrets: k8s-namespace
 	    --dry-run=client -o yaml | kubectl apply -f - ; \
 	fi
 
+.PHONY: assert-image
+assert-image:
+	@if [ -z "$(strip $(REGISTRY_EFFECTIVE))" ]; then \
+		echo "[assert-image] No registry detected (using local import workflow)."; \
+		echo "[assert-image] Verifying image present in containerd namespace $(CTR_NS): $(IMAGE_FQN)"; \
+		if ! sudo ctr -n $(CTR_NS) images ls | awk '{print $$1}' | grep -qx '$(IMAGE_FQN)'; then \
+			echo "[assert-image] MISSING image $(IMAGE_FQN). Run: make save VERSION=$(VERSION) && sudo make load VERSION=$(VERSION)"; \
+			exit 1; \
+		fi; \
+		echo "[assert-image] Image found."; \
+	else \
+		echo "[assert-image] Registry detected ($(REGISTRY_EFFECTIVE)); cluster will pull image."; \
+	fi
+
 .PHONY: deploy
-deploy: k8s-namespace k8s-config k8s-secrets
+deploy: k8s-namespace k8s-config k8s-secrets assert-image
 	kubectl apply -f k8s/pvc.yaml
 	@echo "Applying Deployment (preferred image=$(IMAGE_FQN))"
 	@IMAGE="$(IMAGE_FQN)" envsubst '$${IMAGE}' < k8s/deployment.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -
