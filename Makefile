@@ -81,7 +81,7 @@ k8s-config: k8s-namespace
 	kubectl -n $(NAMESPACE) create configmap endo-api-config \
 	  --from-literal=DJANGO_ENV=production \
 	  --from-literal=DJANGO_DEBUG=false \
-	  --from-literal=DJANGO_ALLOWED_HOSTS="$(HOST)" \
+	  --from-literal=DJANGO_ALLOWED_HOSTS="$(HOST),localhost,127.0.0.1,endo-api,endo-api.endo-api.svc,endo-api.endo-api.svc.cluster.local,*" \
 	  --from-literal=DJANGO_SETTINGS_MODULE="endo_api.settings_prod" \
 	  --dry-run=client -o yaml | kubectl apply -f -
 
