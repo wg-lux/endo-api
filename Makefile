@@ -50,6 +50,12 @@ help:
 	@echo "  undeploy        - Delete resources (keeps namespace)"
 	@echo "  logs            - Tail logs"
 	@echo "  status          - Show objects/status"
+	@echo ""
+	@echo "Registry Management:"
+	@echo "  debug-registry           - Debug registry detection and configuration"
+	@echo "  configure-docker-registry - Configure Docker for insecure registry"
+	@echo "  registry-login          - Login to registry (if authentication required)"
+	@echo "  registry-test           - Test registry connectivity and authentication"
 
 .PHONY: build
 build:
@@ -198,3 +204,34 @@ configure-docker-registry:
 	@echo "Restarting Docker daemon..."
 	@sudo systemctl restart docker
 	@echo "Docker configured for insecure registry: $(REGISTRY_EFFECTIVE)"
+
+# Login to registry (if authentication required)
+.PHONY: registry-login
+registry-login:
+	@echo "Logging into registry $(REGISTRY_EFFECTIVE)"
+	@if [ -z "$(REGISTRY_EFFECTIVE)" ]; then echo "No registry detected"; exit 1; fi
+	@echo "Note: If registry requires no authentication, you can skip this step."
+	@echo "Enter username for $(REGISTRY_EFFECTIVE) (or press Enter if no auth needed):"
+	@read -r username; \
+	if [ -n "$$username" ]; then \
+		$(ENGINE) login $(REGISTRY_EFFECTIVE) -u "$$username"; \
+	else \
+		echo "Skipping authentication - assuming registry allows anonymous push"; \
+	fi
+
+# Check registry connectivity and authentication
+.PHONY: registry-test
+registry-test:
+	@echo "Testing registry connectivity to $(REGISTRY_EFFECTIVE)"
+	@if [ -z "$(REGISTRY_EFFECTIVE)" ]; then echo "No registry detected"; exit 1; fi
+	@echo "Testing HTTP connectivity..."
+	@curl -f http://$(REGISTRY_EFFECTIVE)/v2/ 2>/dev/null && echo "✓ Registry accessible" || echo "✗ Registry not accessible"
+	@echo "Testing Docker connectivity..."
+	@$(ENGINE) pull hello-world:latest >/dev/null 2>&1 || true
+	@$(ENGINE) tag hello-world:latest $(REGISTRY_EFFECTIVE)/hello-world:test 2>/dev/null || true
+	@if $(ENGINE) push $(REGISTRY_EFFECTIVE)/hello-world:test >/dev/null 2>&1; then \
+		echo "✓ Can push to registry"; \
+		$(ENGINE) rmi $(REGISTRY_EFFECTIVE)/hello-world:test >/dev/null 2>&1 || true; \
+	else \
+		echo "✗ Cannot push to registry - may need authentication"; \
+	fi
