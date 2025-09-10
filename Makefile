@@ -10,11 +10,12 @@ SHELL := /usr/bin/env bash
 
 VERSION       ?= 1.0.0
 IMAGE_NAME    ?= endo-api
-IMG          ?= $(IMAGE_NAME):$(VERSION)
+IMG           ?= $(IMAGE_NAME):$(VERSION)
 NAMESPACE     ?= endo-api
 HOST          ?= endo-api.xulutions.net
 
-ENGINE       ?= $(shell command -v podman >/dev/null 2>&1 && echo podman || (command -v docker >/dev/null 2>&1 && echo docker))
+ENGINE        ?= $(shell command -v podman >/dev/null 2>&1 && echo podman || (command -v docker >/dev/null 2>&1 && echo docker))
+NAMESPACE	  ?= endo-api
 CTR_NS        ?= k8s.io
 IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 
@@ -26,6 +27,7 @@ REGISTRY_DETECTED := $(shell kubectl get svc -A -o jsonpath='{range .items[?(@.m
 REGISTRY_EFFECTIVE := $(if $(strip $(REGISTRY)),$(REGISTRY),$(REGISTRY_DETECTED))
 # Fully qualified image (priority: detected/explicit registry -> docker hub library)
 IMAGE_FQN := $(if $(strip $(REGISTRY_EFFECTIVE)),$(REGISTRY_EFFECTIVE)/$(IMAGE_NAME):$(VERSION),docker.io/library/$(IMAGE_NAME):$(VERSION))
+BUILD_TS    := $(shell date -u +%Y%m%d%H%M%S)
 
 # Build configuration
 DOCKER_BUILDKIT ?= 0          # Default off (was causing stack smash); override with DOCKER_BUILDKIT=1 make build
@@ -55,7 +57,7 @@ build:
 	@if [ -n "$(strip $(REGISTRY_EFFECTIVE))" ]; then \
 	  echo "Tagging & pushing to registry: $(IMAGE_FQN)"; \
 	  $(ENGINE) tag $(IMG) $(IMAGE_FQN); \
-	  $(ENGINE) push $(IMAGE_FQN) || { echo 'Push failed (continuing)'; }; \
+	  $(ENGINE) push $(IMAGE_FQN); \
 	else \
 	  echo "No registry detected (REGISTRY/Service 'registry'). Using local import workflow."; \
 	fi
@@ -82,7 +84,7 @@ k8s-config: k8s-namespace
 	kubectl -n $(NAMESPACE) create configmap endo-api-config \
 	  --from-literal=DJANGO_ENV=production \
 	  --from-literal=DJANGO_DEBUG=false \
-	  --from-literal=DJANGO_ALLOWED_HOSTS="$(HOST),localhost,127.0.0.1,endo-api,endo-api.endo-api.svc,endo-api.endo-api.svc.cluster.local,*" \
+	  --from-literal=DJANGO_ALLOWED_HOSTS="$(HOST),localhost,127.0.0.1,endo-api,endo-api.endo-api.svc,endo-api.endo-api.svc.cluster.local" \
 	  --from-literal=DJANGO_SETTINGS_MODULE="endo_api.settings_prod" \
 	  --dry-run=client -o yaml | kubectl apply -f -
 
@@ -127,7 +129,7 @@ assert-image:
 deploy: k8s-namespace k8s-config k8s-secrets assert-image
 	kubectl apply -f k8s/pvc.yaml
 	@echo "Applying Deployment (preferred image=$(IMAGE_FQN))"
-	@IMAGE="$(IMAGE_FQN)" envsubst '$${IMAGE}' < k8s/deployment.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -
+	@BUILD_TS="$(BUILD_TS)" IMAGE="$(IMAGE_FQN)" envsubst '$${BUILD_TS} $${IMAGE}' < k8s/deployment.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -
 	kubectl apply -f k8s/service.yaml
 	@echo "Applying Ingress (host=$(HOST))"
 	@HOST="$(HOST)" envsubst '$${HOST}' < k8s/ingress.tmpl.yaml | kubectl -n $(NAMESPACE) apply -f -

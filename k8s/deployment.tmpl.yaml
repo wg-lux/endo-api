@@ -12,6 +12,8 @@ spec:
     metadata:
       labels:
         app: endo-api
+      annotations:
+        build-timestamp: "${BUILD_TS}"
     spec:
       securityContext:
         fsGroup: 10001
