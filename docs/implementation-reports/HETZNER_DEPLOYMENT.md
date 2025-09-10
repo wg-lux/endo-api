@@ -105,8 +105,9 @@ kubectl get configmap,secret -n endo-api
 Verify secret keys:
 ```bash
 
-kubectl -n endo-api get secret endo-api-secrets 
-kubectl -n endo-api get secret endo-api-secrets -o jsonpath='{.data.DATABASE_URL}' | base64 -d; echo kubectl -n endo-api get secret endo-api-secrets -o jsonpath='{.data.DJANGO_SECRET_KEY}' | base64 -d | head -c 16; echo
+kubectl -n endo-api get secret endo-api-secrets -o jsonpath='{.data.DATABASE_URL}' | base64 -d | sha256sum  
+kubectl -n endo-api get secret endo-api-secrets -o jsonpath='{.data.DJANGO_SECRET_KEY}' | base64 -d | sha256sum  
+echo "Secrets exist (hashes above)."  
 ```
 
 ### Phase 6: Deployment & Rollout
