@@ -40,8 +40,7 @@ let
     inherit pkgs lib appConfig isDev; 
   };
   
-  # No legacy tasks - functionality moved to management.nix
-  tasks = {};
+
   
   processes = import ./processes.nix { 
     inherit pkgs lib appConfig isDev; 
@@ -64,7 +63,7 @@ in
   # Integrate centralized management with legacy modular components
   # Unified system: management.nix provides all functionality
   scripts = scripts // managementSystem.scripts;
-  tasks = managementSystem.tasks // tasks;  # All tasks come from management.nix
+  tasks = managementSystem.tasks;  # All tasks come from management.nix
   
   services = services;
   processes = processes;
