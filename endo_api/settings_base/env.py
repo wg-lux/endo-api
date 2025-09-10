@@ -62,7 +62,7 @@ def dev_secret_key() -> str:
 
 
 def allowed_hosts_default() -> List[str]:
-    return get_list("DJANGO_ALLOWED_HOSTS", ["localhost", "127.0.0.1", "*"])
+    return get_list("DJANGO_ALLOWED_HOSTS", ["localhost", "127.0.0.1", "10.0.0.0/8", "172.16.255.0/24"])
 
 
 def csrf_trusted_origins_default() -> List[str]:
