@@ -15,7 +15,7 @@ A sophisticated Django application for endoscopy data processing and management,
 git clone <repository-url>
 cd endo-api
 direnv allow                    # Enable automatic environment loading
-manage setup                   # Complete environment setup
+manage setup                   # Complete environment setup (see Setup section below)
 ```
 
 ### 2. Development Workflow
@@ -66,13 +66,105 @@ manage docker-prod-build && manage docker-prod-run
 - **Comprehensive Validation**: System health monitoring with JSON reports
 - **Professional Organization**: Clean architecture with full documentation
 
-## 📋 Management Commands
+## � Environment Setup
+
+The `manage setup` command performs initial environment configuration and should be run:
+- **First time** after cloning the repository
+- **After configuration changes** (templates, environment variables)
+- **When troubleshooting** environment-related issues
+
+### What Setup Does
+
+#### 1. **Directory Structure Creation**
+```bash
+# Creates essential directories
+data/                          # Application data storage
+├── import/                    # Data import staging
+├── export/                    # Data export staging  
+├── videos/                    # Video file storage
+├── frames/                    # Extracted frame storage
+├── pdfs/                      # PDF document storage
+├── model_weights/             # ML model storage
+└── logs/                      # Application logs
+
+conf/                          # Configuration files
+staticfiles/                   # Static assets for production
+```
+
+#### 2. **Configuration Files**
+- **`conf/db.yaml`**: Database configuration from template
+- **`conf/db_pwd`**: Database password file (⚠️ **secure permissions 0o600**)
+- **`.env`**: Environment variables with generated secrets
+
+#### 3. **Security Setup**
+- **Secret key generation**: Creates `DJANGO_SECRET_KEY` and `DJANGO_SALT`
+- **Password files**: Creates database password with restrictive permissions
+- **Environment isolation**: Configures development vs production settings
+
+#### 4. **CUDA Environment** (Optional)
+- Tests CUDA availability for GPU acceleration
+- Configures PyTorch GPU support
+- Non-blocking (continues if CUDA unavailable)
+
+### Security Considerations
+
+⚠️ **IMPORTANT**: Setup creates default passwords that **MUST** be changed for production:
+
+```bash
+# Default database password is "changeme_in_production"
+# Change it immediately:
+echo "your_secure_password" > conf/db_pwd
+chmod 600 conf/db_pwd
+```
+
+### Setup Usage
+
+```bash
+# Basic setup (recommended for first time)
+manage setup
+
+# Re-run setup (preserves existing secrets)
+manage setup
+
+# Check what setup would do (without changes)
+python scripts/core/setup.py --status-only
+
+# Force regeneration of all files (overwrites existing)
+python scripts/core/setup.py --force
+```
+
+### Troubleshooting Setup
+
+**Missing environment variables**:
+```bash
+# Ensure you're in a devenv shell
+devenv shell
+# Then retry setup
+manage setup
+```
+
+**Permission errors**:
+```bash
+# Ensure directories are writable
+chmod 755 conf/ data/
+# Retry setup
+manage setup
+```
+
+**Template files missing**:
+```bash
+# Check template directory exists
+ls conf_template/
+# Should contain: db.yaml, default.env
+```
+
+## �📋 Management Commands
 
 ### Core Commands
 ```bash
 manage help                    # Show all available commands
-manage status                  # Show current configuration
-manage setup                   # Complete environment and dependency setup
+manage status                  # Show current configuration (mode, host, port)
+manage setup                   # Complete environment setup (directories, config, secrets)
 ```
 
 ### Environment Management
@@ -152,7 +244,7 @@ DJANGO_SECRET_KEY=""             # Set via .env or environment
 
 ### Best Practices
 - All secret files are in `.gitignore` (`.env`, `.secrets`, `conf/`)
-- Use `manage setup` to generate defaults
+- Use `manage setup` to generate defaults (see Environment Setup section)
 - Override defaults with environment variables in production
 - Never hardcode secrets in `app_config.nix` or other Nix files
 
@@ -196,7 +288,7 @@ env:
 
 ### Quick Development Setup
 ```bash
-# Complete setup in one command
+# Complete setup in one command (creates configs, secrets, directories)
 manage dev && manage setup && devenv up
 ```
 
