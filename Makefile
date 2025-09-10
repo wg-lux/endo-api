@@ -24,7 +24,7 @@ IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 REGISTRY       ?=
 REGISTRY_PORT  ?= 5000
 # Auto-detect registry service (checks for 'registry' or 'docker-registry' services)
-REGISTRY_DETECTED := $(shell kubectl get svc -A --no-headers | awk '$$2 ~ /^(registry|docker-registry)$$/ { printf "%s.%s.svc.cluster.local:%s\n", $$2, $$1, $$6 }' | sed 's|/TCP||g' | head -1)
+REGISTRY_DETECTED := $(shell kubectl get svc -A --no-headers | awk '$$2 == "registry" || $$2 == "docker-registry" { printf "%s.%s.svc.cluster.local:%s\n", $$2, $$1, $$6 }' | sed 's|/TCP||g' | head -1)
 REGISTRY_EFFECTIVE := $(if $(strip $(REGISTRY)),$(REGISTRY),$(REGISTRY_DETECTED))
 # Fully qualified image (priority: detected/explicit registry -> docker hub library)
 IMAGE_FQN := $(if $(strip $(REGISTRY_EFFECTIVE)),$(REGISTRY_EFFECTIVE)/$(IMAGE_NAME):$(VERSION),docker.io/library/$(IMAGE_NAME):$(VERSION))
@@ -167,7 +167,7 @@ debug-registry:
 	@echo "=== Registry Detection Debug ==="
 	@echo "REGISTRY (manual): $(REGISTRY)"
 	@echo "REGISTRY_DETECTED raw command:"
-	@echo "kubectl get svc -A --no-headers | awk '$$2 ~ /^(registry|docker-registry)$$/ { printf \"%s.%s.svc.cluster.local:%s\\n\", $$2, $$1, $$6 }' | sed 's|/TCP||g' | head -1"
+	@echo "kubectl get svc -A --no-headers | awk '$$2 == \"registry\" || $$2 == \"docker-registry\" { printf \"%s.%s.svc.cluster.local:%s\\n\", $$2, $$1, $$6 }' | sed 's|/TCP||g' | head -1"
 	@echo "REGISTRY_DETECTED result: $(REGISTRY_DETECTED)"
 	@echo "REGISTRY_EFFECTIVE: $(REGISTRY_EFFECTIVE)"
 	@echo ""
@@ -175,4 +175,4 @@ debug-registry:
 	@kubectl get svc -A | grep -i registry || echo "No registry services found"
 	@echo ""
 	@echo "=== Manual test of awk command ==="
-	@kubectl get svc -A --no-headers | awk '$$2 ~ /^(registry|docker-registry)$$/ { printf "%s.%s.svc.cluster.local:%s\n", $$2, $$1, $$6 }' | sed 's|/TCP||g'
+	@kubectl get svc -A --no-headers | awk '$$2 == "registry" || $$2 == "docker-registry" { printf "%s.%s.svc.cluster.local:%s\n", $$2, $$1, $$6 }' | sed 's|/TCP||g'
