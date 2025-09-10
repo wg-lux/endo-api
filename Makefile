@@ -20,10 +20,11 @@ CTR_NS        ?= k8s.io
 IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 
 # Optional local/regional registry support
-# Set REGISTRY (host:port) explicitly or auto-detect a Service named 'registry'
+# Set REGISTRY (host:port) explicitly or auto-detect a Service named 'registry' or 'docker-registry'
 REGISTRY       ?=
 REGISTRY_PORT  ?= 5000
-REGISTRY_DETECTED := $(shell kubectl get svc -A -o jsonpath='{range .items[?(@.metadata.name=="registry")]}{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{(index .spec.ports 0).port}{"\n"}{end}' 2>/dev/null | head -1)
+#TODO Document how we deteckt docker-registry
+REGISTRY_DETECTED := $(shell kubectl get svc -A -o jsonpath='{range .items[?(@.metadata.name=="registry" || @.metadata.name=="docker-registry")]}{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{(index .spec.ports 0).port}{"\n"}{end}' 2>/dev/null | head -1)
 REGISTRY_EFFECTIVE := $(if $(strip $(REGISTRY)),$(REGISTRY),$(REGISTRY_DETECTED))
 # Fully qualified image (priority: detected/explicit registry -> docker hub library)
 IMAGE_FQN := $(if $(strip $(REGISTRY_EFFECTIVE)),$(REGISTRY_EFFECTIVE)/$(IMAGE_NAME):$(VERSION),docker.io/library/$(IMAGE_NAME):$(VERSION))
