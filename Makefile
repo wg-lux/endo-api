@@ -160,3 +160,19 @@ image-info:
 	@echo "Base tag: $(IMG)"; \
 	 echo "Registry effective: $(REGISTRY_EFFECTIVE)"; \
 	 echo "Image FQN: $(IMAGE_FQN)";
+
+# Debug registry detection
+.PHONY: debug-registry
+debug-registry:
+	@echo "=== Registry Detection Debug ==="
+	@echo "REGISTRY (manual): $(REGISTRY)"
+	@echo "REGISTRY_DETECTED raw command:"
+	@echo "kubectl get svc -A -o jsonpath='{range .items[?(@.metadata.name==\"registry\" || @.metadata.name==\"docker-registry\")]}{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{(index .spec.ports 0).port}{\"\\n\"}{end}'"
+	@echo "REGISTRY_DETECTED result: $(REGISTRY_DETECTED)"
+	@echo "REGISTRY_EFFECTIVE: $(REGISTRY_EFFECTIVE)"
+	@echo ""
+	@echo "=== All registry-related services ==="
+	@kubectl get svc -A | grep -i registry || echo "No registry services found"
+	@echo ""
+	@echo "=== Testing alternative detection methods ==="
+	@kubectl get svc docker-registry -n registry -o jsonpath='{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{(index .spec.ports 0).port}' 2>/dev/null || echo "Direct service lookup failed"
