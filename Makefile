@@ -24,7 +24,8 @@ IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 REGISTRY       ?=
 REGISTRY_PORT  ?= 5000
 # Auto-detect registry service (checks for 'registry' or 'docker-registry' services)
-REGISTRY_DETECTED := $(shell kubectl get svc docker-registry -n registry -o jsonpath='{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{.spec.ports[0].port}' 2>/dev/null)
+# Use cluster IP instead of DNS name for external Docker access
+REGISTRY_DETECTED := $(shell kubectl get svc docker-registry -n registry -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null)
 REGISTRY_EFFECTIVE := $(if $(strip $(REGISTRY)),$(REGISTRY),$(REGISTRY_DETECTED))
 # Fully qualified image (priority: detected/explicit registry -> docker hub library)
 IMAGE_FQN := $(if $(strip $(REGISTRY_EFFECTIVE)),$(REGISTRY_EFFECTIVE)/$(IMAGE_NAME):$(VERSION),docker.io/library/$(IMAGE_NAME):$(VERSION))
@@ -58,6 +59,7 @@ build:
 	@if [ -n "$(strip $(REGISTRY_EFFECTIVE))" ]; then \
 	  echo "Tagging & pushing to registry: $(IMAGE_FQN)"; \
 	  $(ENGINE) tag $(IMG) $(IMAGE_FQN); \
+	  echo "Note: Adding $(REGISTRY_EFFECTIVE) to Docker daemon's insecure registries if needed..."; \
 	  $(ENGINE) push $(IMAGE_FQN); \
 	else \
 	  echo "No registry detected (REGISTRY/Service 'registry'). Using local import workflow."; \
@@ -167,7 +169,7 @@ debug-registry:
 	@echo "=== Registry Detection Debug ==="
 	@echo "REGISTRY (manual): $(REGISTRY)"
 	@echo "REGISTRY_DETECTED raw command:"
-	@echo "kubectl get svc docker-registry -n registry -o jsonpath='{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{.spec.ports[0].port}' 2>/dev/null"
+	@echo "kubectl get svc docker-registry -n registry -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null"
 	@echo "REGISTRY_DETECTED result: $(REGISTRY_DETECTED)"
 	@echo "REGISTRY_EFFECTIVE: $(REGISTRY_EFFECTIVE)"
 	@echo ""
@@ -175,4 +177,24 @@ debug-registry:
 	@kubectl get svc -A | grep -i registry || echo "No registry services found"
 	@echo ""
 	@echo "=== Manual test of detection command ==="
-	@kubectl get svc docker-registry -n registry -o jsonpath='{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{.spec.ports[0].port}' 2>/dev/null
+	@kubectl get svc docker-registry -n registry -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null
+	@echo ""
+	@echo "=== Docker daemon configuration check ==="
+	@echo "Note: For insecure registry $(REGISTRY_EFFECTIVE), ensure Docker daemon.json includes:"
+	@echo '{"insecure-registries": ["$(REGISTRY_EFFECTIVE)"]}'
+
+# Configure Docker for insecure registry
+.PHONY: configure-docker-registry
+configure-docker-registry:
+	@echo "Configuring Docker for insecure registry $(REGISTRY_EFFECTIVE)"
+	@if [ -z "$(REGISTRY_EFFECTIVE)" ]; then echo "No registry detected"; exit 1; fi
+	@echo "Creating/updating /etc/docker/daemon.json..."
+	@sudo mkdir -p /etc/docker
+	@if [ -f /etc/docker/daemon.json ]; then \
+		echo "Backing up existing daemon.json..."; \
+		sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.backup.$$(date +%Y%m%d_%H%M%S); \
+	fi
+	@echo '{"insecure-registries": ["$(REGISTRY_EFFECTIVE)"]}' | sudo tee /etc/docker/daemon.json
+	@echo "Restarting Docker daemon..."
+	@sudo systemctl restart docker
+	@echo "Docker configured for insecure registry: $(REGISTRY_EFFECTIVE)"
