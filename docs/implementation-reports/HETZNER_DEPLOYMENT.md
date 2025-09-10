@@ -58,7 +58,7 @@ git log -1 --oneline
 Choose a version tag (do not overwrite an existing pushed tag):
 ```bash
 export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
-export APP_VERSION=1.0.3
+export APP_VERSION=1.0.0
 export HOSTNAME_PUBLIC="endo-api.xulutions.net"   # adjust
 export DJANGO_SECRET_KEY=$(openssl rand -base64 48)
 export POSTGRES_APP_USER="endoreg"

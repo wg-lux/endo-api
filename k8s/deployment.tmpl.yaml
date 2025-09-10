@@ -20,7 +20,7 @@ spec:
       containers:
         - name: api
           image: ${IMAGE}
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
             - containerPort: 8118
           envFrom:
