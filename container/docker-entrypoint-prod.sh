@@ -18,6 +18,15 @@ export STORAGE_DIR="${STORAGE_DIR:-/app/data}"
 export DATA_DIR="${DATA_DIR:-/app/data}"
 export WORKING_DIR="${WORKING_DIR:-/app}"
 
+# Production safety check: Prevent DEBUG=True in production
+debug_val=$(echo "${DJANGO_DEBUG:-}" | tr '[:upper:]' '[:lower:]')
+if [ "$debug_val" = "1" ] || [ "$debug_val" = "true" ] || [ "$debug_val" = "yes" ] || [ "$debug_val" = "on" ]; then
+    echo "❌ ERROR: DJANGO_DEBUG is enabled in production environment!" >&2
+    echo "   This is a security risk and not allowed in production." >&2
+    echo "   Set DJANGO_DEBUG to 'False', '0', 'no', or leave unset." >&2
+    exit 1
+fi
+
 # Ensure essential directories exist (no credentials required via volumes)
 mkdir -p "$DATA_DIR" /app/staticfiles
 
