@@ -365,5 +365,59 @@ manage status                   # Verify changes
 
 ---
 
+### Docker/Podman caches
+```
+# Disk cleanup (Docker / Podman)
+# ⚠️ WARNING: These commands delete unused containers/images/caches.
+# ⚠️ Your next build may be slower because caches are cleared.
+# ⚠️ Do NOT remove images your cluster is actively using.
+
+# 1) Inspect usage
+docker system df
+docker system df -v   # detailed per image/container
+
+# 2) Stop & remove stopped containers (safe)
+docker ps -a --format 'table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}'
+docker container prune -f
+
+# 3) Remove dangling images (untagged layers, safe)
+docker image prune -f
+# Fallback if some <none>:<none> remain:
+IMGS="$(docker images -q --filter 'dangling=true')"; [ -n "$IMGS" ] && docker rmi -f $IMGS
+docker rmi -f $(docker images -q --filter "dangling=true")
+
+# 4) Remove unused images (not used by any container)
+# Safer (only images older than 10 days):
+docker image prune -a -f --filter "until=240h"
+# Or nuke all unused images:
+# docker image prune -a -f
+
+# 5) Clear build cache (often the biggest win)
+docker builder prune -a -f
+# If you use buildx:
+docker buildx prune -a -f
+
+# 6) If an image is "in use" but you don't need the container(s)
+# Replace IMGID with an image ID from `docker system df -v`
+docker ps -a --filter ancestor=IMGID --format '{{.ID}}\t{{.Image}}\t{{.Names}}'
+docker rm -f $(docker ps -a --filter ancestor=IMGID -q)
+docker rmi -f IMGID
+
+# 7) (Optional, aggressive) prune everything unused incl. volumes
+docker system prune -a --volumes -f
+
+# 8) Podman (only if you used it)
+podman system df || true
+podman ps --all --external || true
+podman system prune -a --volumes -f || true
+# If an image is "in use", remove the referencing container(s) first, then:
+# podman rmi -f <image_id_or_name>
+
+# 9) Verify reclaimed space
+docker system df -v
+df -h | grep -E '^/|Filesystem'
+
+```
+
 *Last updated: September 2025*  
 *System Version: DevEnv Unified Management v2.1 (Docker/Podman)*
