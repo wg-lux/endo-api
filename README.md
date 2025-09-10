@@ -32,6 +32,17 @@ manage deploy                  # Complete deployment pipeline
 # Or use containers:
 manage docker-prod-build && manage docker-prod-run
 ```
+#### Optional
+- If manage docker-prod-run shows errors for import variable for database, then run this command first in terminal
+  ```
+  eval "$(python -c "import shlex; from pathlib import Path as P; from urllib.parse import quote_plus; import yaml; c=yaml.safe_load(P('conf/db.yaml').read_text()) if P('conf/db.yaml').exists() else {}; eng=c.get('engine','django.db.backends.postgresql'); host=c.get('host','localhost'); name=c.get('name',''); user=c.get('user',''); port=str(c.get('port','5432')); pwd=c.get('password',''); pf=c.get('password_file'); pwd=P(pf).read_text().strip() if pf and P(pf).is_file() else pwd; auth=quote_plus(user) if user else ''; auth=auth+(':'+quote_plus(pwd) if pwd else ''); at='@' if auth else ''; net=f'{host}:{port}' if port else host; url=f'postgresql://{auth}{at}{net}/{name}'; print(f'export DATABASE_URL={shlex.quote(url)}'); print(f'export DB_ENGINE={shlex.quote(eng)}'); print(f'export DB_NAME={shlex.quote(name)}'); print(f'export DB_USER={shlex.quote(user)}'); print(f'export DB_PASSWORD={shlex.quote(pwd)}'); print(f'export DB_HOST={shlex.quote(host)}'); print(f'export DB_PORT={shlex.quote(port)}')")"
+  ```
+- Quick check
+  ```
+  echo "$DATABASE_URL"
+  env | grep -E '^DB_(ENGINE|NAME|USER|PASSWORD|HOST|PORT)='
+
+  ```
 
 ## 🎯 Key Features
 
