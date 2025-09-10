@@ -83,7 +83,6 @@ EOF
 
 ### Phase 4: Image Build & Load (Local Build → RKE2 containerd)
 ```bash
-devenv shell
 make build VERSION=${APP_VERSION}
 make save VERSION=${APP_VERSION}
 sudo make load VERSION=${APP_VERSION}
