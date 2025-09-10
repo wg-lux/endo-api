@@ -23,8 +23,8 @@ IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 # Set REGISTRY (host:port) explicitly or auto-detect a Service named 'registry' or 'docker-registry'
 REGISTRY       ?=
 REGISTRY_PORT  ?= 5000
-#TODO Document how we deteckt docker-registry
-REGISTRY_DETECTED := $(shell kubectl get svc -A -o jsonpath='{range .items[?(@.metadata.name=="registry" || @.metadata.name=="docker-registry")]}{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{(index .spec.ports 0).port}{"\n"}{end}' 2>/dev/null | head -1)
+# Auto-detect registry service (checks for 'registry' or 'docker-registry' services)
+REGISTRY_DETECTED := $(shell kubectl get svc -A --no-headers | awk '$$2 ~ /^(registry|docker-registry)$$/ { printf "%s.%s.svc.cluster.local:%s\n", $$2, $$1, $$6 }' | sed 's|/TCP||g' | head -1)
 REGISTRY_EFFECTIVE := $(if $(strip $(REGISTRY)),$(REGISTRY),$(REGISTRY_DETECTED))
 # Fully qualified image (priority: detected/explicit registry -> docker hub library)
 IMAGE_FQN := $(if $(strip $(REGISTRY_EFFECTIVE)),$(REGISTRY_EFFECTIVE)/$(IMAGE_NAME):$(VERSION),docker.io/library/$(IMAGE_NAME):$(VERSION))
@@ -167,12 +167,12 @@ debug-registry:
 	@echo "=== Registry Detection Debug ==="
 	@echo "REGISTRY (manual): $(REGISTRY)"
 	@echo "REGISTRY_DETECTED raw command:"
-	@echo "kubectl get svc -A -o jsonpath='{range .items[?(@.metadata.name==\"registry\" || @.metadata.name==\"docker-registry\")]}{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{(index .spec.ports 0).port}{\"\\n\"}{end}'"
+	@echo "kubectl get svc -A --no-headers | awk '$$2 ~ /^(registry|docker-registry)$$/ { printf \"%s.%s.svc.cluster.local:%s\\n\", $$2, $$1, $$6 }' | sed 's|/TCP||g' | head -1"
 	@echo "REGISTRY_DETECTED result: $(REGISTRY_DETECTED)"
 	@echo "REGISTRY_EFFECTIVE: $(REGISTRY_EFFECTIVE)"
 	@echo ""
 	@echo "=== All registry-related services ==="
 	@kubectl get svc -A | grep -i registry || echo "No registry services found"
 	@echo ""
-	@echo "=== Testing alternative detection methods ==="
-	@kubectl get svc docker-registry -n registry -o jsonpath='{.metadata.name}.{.metadata.namespace}.svc.cluster.local:{(index .spec.ports 0).port}' 2>/dev/null || echo "Direct service lookup failed"
+	@echo "=== Manual test of awk command ==="
+	@kubectl get svc -A --no-headers | awk '$$2 ~ /^(registry|docker-registry)$$/ { printf "%s.%s.svc.cluster.local:%s\n", $$2, $$1, $$6 }' | sed 's|/TCP||g'
