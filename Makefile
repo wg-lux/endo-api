@@ -54,7 +54,9 @@ help:
 	@echo "Registry Management:"
 	@echo "  debug-registry           - Debug registry detection and configuration"
 	@echo "  configure-docker-registry - Configure Docker for insecure registry"
-	@echo "  registry-login          - Login to registry (if authentication required)"
+	@echo "  registry-auth-info       - Show registry authentication information"
+	@echo "  registry-login          - Login to registry (requires credentials)"
+	@echo "  registry-add-user       - Add new user to registry authentication"
 	@echo "  registry-test           - Test registry connectivity and authentication"
 
 .PHONY: build
@@ -210,14 +212,50 @@ configure-docker-registry:
 registry-login:
 	@echo "Logging into registry $(REGISTRY_EFFECTIVE)"
 	@if [ -z "$(REGISTRY_EFFECTIVE)" ]; then echo "No registry detected"; exit 1; fi
-	@echo "Note: If registry requires no authentication, you can skip this step."
-	@echo "Enter username for $(REGISTRY_EFFECTIVE) (or press Enter if no auth needed):"
+	@echo "Registry uses htpasswd authentication. Available users:"
+	@kubectl get configmap registry-auth -n registry -o jsonpath='{.data.registry\.password}' | cut -d: -f1 || echo "Cannot read registry auth config"
+	@echo ""
+	@echo "Enter username for $(REGISTRY_EFFECTIVE):"
 	@read -r username; \
 	if [ -n "$$username" ]; then \
 		$(ENGINE) login $(REGISTRY_EFFECTIVE) -u "$$username"; \
 	else \
-		echo "Skipping authentication - assuming registry allows anonymous push"; \
+		echo "No username provided - cannot authenticate"; \
+		exit 1; \
 	fi
+
+# Show registry authentication info
+.PHONY: registry-auth-info
+registry-auth-info:
+	@echo "Registry authentication information:"
+	@echo "Registry URL: $(REGISTRY_EFFECTIVE)"
+	@echo "Authentication method: htpasswd"
+	@echo "Available users:"
+	@kubectl get configmap registry-auth -n registry -o jsonpath='{.data.registry\.password}' 2>/dev/null | cut -d: -f1 || echo "Cannot read registry auth config"
+	@echo ""
+	@echo "To add a new user or reset password, you can:"
+	@echo "1. Update the registry-auth ConfigMap"
+	@echo "2. Or use the registry-add-user target"
+
+# Add new user to registry (requires htpasswd)
+.PHONY: registry-add-user
+registry-add-user:
+	@echo "Adding new user to registry authentication"
+	@if ! command -v htpasswd >/dev/null 2>&1; then \
+		echo "htpasswd command not found. Install apache2-utils: apt-get install apache2-utils"; \
+		exit 1; \
+	fi
+	@echo "Enter new username:"
+	@read -r username; \
+	if [ -z "$$username" ]; then echo "Username required"; exit 1; fi; \
+	echo "Enter password for $$username:"; \
+	read -s password; \
+	if [ -z "$$password" ]; then echo "Password required"; exit 1; fi; \
+	htpasswd_entry=$$(htpasswd -bnB "$$username" "$$password"); \
+	echo "Generated htpasswd entry: $$htpasswd_entry"; \
+	echo ""; \
+	echo "To update the registry, run:"; \
+	echo "kubectl patch configmap registry-auth -n registry --patch '{\"data\":{\"registry.password\":\"$$htpasswd_entry\"}}'"
 
 # Check registry connectivity and authentication
 .PHONY: registry-test
