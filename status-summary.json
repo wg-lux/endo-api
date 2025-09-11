@@ -1,13 +1,13 @@
 {
-  "timestamp": "2025-09-01T14:48:48+02:00",
+  "timestamp": "2025-09-10T14:25:38+02:00",
   "validation_port": 10123,
   "project_root": "/home/admin/dev/endo-api",
   "summary": {
-    "total_tests": 16,
-    "passed": 10,
-    "warnings": 1,
+    "total_tests": 12,
+    "passed": 11,
+    "warnings": 0,
     "failed": 0,
-    "skipped": 5
+    "skipped": 1
   },
   "tests": {
     "cuda_detailed": {
@@ -18,14 +18,6 @@
       "result": "PASS",
       "message": "ISO date format supported"
     },
-    "container_dev_build": {
-      "result": "SKIP",
-      "message": "Container tests skipped by user"
-    },
-    "container_prod_run": {
-      "result": "SKIP",
-      "message": "Container tests skipped by user"
-    },
     "database": {
       "result": "PASS",
       "message": "Database connectivity working"
@@ -33,10 +25,6 @@
     "file_structure": {
       "result": "PASS",
       "message": "All required files present"
-    },
-    "container_dev_run": {
-      "result": "SKIP",
-      "message": "Container tests skipped by user"
     },
     "setup_script": {
       "result": "PASS",
@@ -47,12 +35,8 @@
       "message": "Shebang execution successful"
     },
     "cuda_gpu": {
-      "result": "WARNING",
-      "message": "GPU/CUDA not available or has issues"
-    },
-    "container_prod_build": {
-      "result": "SKIP",
-      "message": "Container tests skipped by user"
+      "result": "PASS",
+      "message": "GPU/CUDA available and working"
     },
     "environment_config": {
       "result": "PASS",

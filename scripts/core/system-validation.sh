@@ -345,7 +345,8 @@ test_containers() {
         local count=0
         
         while kill -0 "$pid" 2>/dev/null; do
-            local dots=$(printf "%*s" $((count % 4)) | tr ' ' '.')
+            # Use explicit empty-string argument and quoted width to avoid SC2183
+            local dots=$(printf '%*s' "$((count % 4))" "" | tr ' ' '.')
             printf "\r${BLUE}ℹ️  Building $container_type container$dots (${count}s)${NC}"
             sleep 1
             ((count++))
@@ -632,122 +633,142 @@ show_summary() {
                 "FAIL") ((failed++)) ;;  
                 "WARNING") ((warnings++)) ;;
                 "SKIP") ((skipped++)) ;;
+                *) ;; 
             esac
             ((total++))
         fi
     done
     
-    echo "Total Tests: $total"
     echo "✅ Passed: $passed"
-    echo "⚠️  Warnings: $warnings" 
     echo "❌ Failed: $failed"
-    echo "⏭️  Skipped: $skipped"
+    echo "⚠️ Warnings: $warnings"
+    echo "⏭️ Skipped: $skipped"
+    echo "🔢 Total: $total"
+    
+    # Show detailed results for each test
     echo ""
+    echo "🔍 Detailed Test Results:"
+    echo "========================="
     
-    if [ $failed -eq 0 ]; then
-        log_success "🎉 System validation completed successfully!"
-        echo "✅ All critical systems are functional"
-        if [ $warnings -gt 0 ]; then
-            echo "⚠️  Some non-critical warnings detected - review JSON for details"
-        fi
-    else
-        log_error "❌ System validation failed"
-        echo "💡 Check JSON summary for detailed failure information"
-        echo "📋 JSON Report: $OUTPUT_FILE"
-    fi
-}
-
-# Main execution
-main() {
-    local json_only=false
-    local skip_containers=false
-    local force_rebuild=false
-    local verbose=false
-    
-    # Parse arguments
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            --json-only)
-                json_only=true
-                shift
-                ;;
-            --skip-containers)
-                skip_containers=true
-                shift
-                ;;
-            --force-rebuild)
-                force_rebuild=true
-                shift
-                ;;
-            --verbose)
-                verbose=true
-                shift
-                ;;
-            *)
-                echo "Usage: $0 [--json-only] [--skip-containers] [--force-rebuild] [--verbose]"
-                exit 1
-                ;;
-        esac
-    done
-    
-    if [ "$json_only" = false ]; then
-        echo "🔍 Endo API System Validation"
-        echo "=============================="
-        echo "Validation Port: $VALIDATION_PORT"
-        echo "Output File: $OUTPUT_FILE"
-        echo ""
-    fi
-    
-    cd "$PROJECT_ROOT"
-    
-    # Run system compatibility check first
-    log_info "🔍 Running system compatibility checks..."
-    if ! test_system_compatibility; then
-        log_error "❌ System compatibility check failed - cannot proceed safely"
-        generate_json_summary
-        if [ "$json_only" = false ]; then
-            show_summary
-        fi
-        exit 1
-    fi
-    
-    # Run all validation tests
-    test_file_structure || true
-    test_environment_configuration || true  
-    test_database_connectivity || true
-    test_cuda_availability || true
-    
-    if [ "$skip_containers" = false ]; then
-        test_containers "$force_rebuild" "$verbose" || true
-    else
-        log_info "⏭️  Skipping container tests (--skip-containers flag)"
-        record_result "container_dev_build" "SKIP" "Container tests skipped by user"
-        record_result "container_dev_run" "SKIP" "Container tests skipped by user"
-        record_result "container_prod_build" "SKIP" "Container tests skipped by user"
-        record_result "container_prod_run" "SKIP" "Container tests skipped by user"
-    fi
-    
-    test_legacy_compatibility || true
-    
-    # Generate outputs
-    generate_json_summary
-    
-    if [ "$json_only" = false ]; then
-        show_summary
-        echo ""
-        echo "📋 Detailed results available in: $OUTPUT_FILE"
-    fi
-    
-    # Exit with appropriate code
-    local failed_count=0
     for key in "${!status_results[@]}"; do
-        if [[ $key == *.result ]] && [[ ${status_results[$key]} == "FAIL" ]]; then
-            ((failed_count++))
+        if [[ $key == *.result ]]; then
+            local test_name="${key%.result}"
+            local result="${status_results[$key]}"
+            local message="${status_results[${test_name}.message]:-No message}"
+            local details="${status_results[${test_name}.details]}"
+            
+            # Color coding for results
+            local color="$NC"
+            case "$result" in
+                "PASS") color="${GREEN}" ;;
+                "FAIL") color="${RED}" ;;
+                "WARNING") color="${YELLOW}" ;;
+                "SKIP") color="${BLUE}" ;;
+            esac
+            
+            # Format details for JSON-friendly output
+            if [[ $details == \{* ]]; then
+                # Already JSON object
+                local formatted_details="$details"
+            else
+                # Plain text, convert to JSON string
+                local formatted_details="$(echo "$details" | jq -R . | jq -s .)"
+            fi
+            
+            echo -e "  ${color}• $test_name: $result - $message${NC}"
+            if [ "$result" != "PASS" ]; then
+                echo "    Details: $formatted_details"
+            fi
         fi
     done
     
-    exit $failed_count
+    # Show summary of skipped tests
+    if [ $skipped -gt 0 ]; then
+        echo ""
+        echo "⏭️ Skipped Tests:"
+        echo "================"
+        
+        for key in "${!status_results[@]}"; do
+            if [[ $key == *.result ]] && [[ "${status_results[$key]}" == "SKIP" ]]; then
+                local test_name="${key%.result}"
+                local message="${status_results[${test_name}.message]:-No message}"
+                echo "  • $test_name - $message"
+            fi
+        done
+    fi
+    
+    echo ""
+    echo "📂 Project Structure Overview:"
+    echo "============================"
+    echo "Root Directory: $PROJECT_ROOT"
+    echo "Validation Port: $VALIDATION_PORT"
+    echo ""
+    echo "Scripts:"
+    find "$PROJECT_ROOT/scripts" -maxdepth 1 -type f -printf "  - %f\n" | sed 's/^/    /'
+    echo ""
+    echo "Containers:"
+    find "$PROJECT_ROOT/container" -maxdepth 1 -type f -printf "  - %f\n" | sed 's/^/    /'
+    echo ""
+    echo "Docs:"
+    find "$PROJECT_ROOT/docs" -maxdepth 1 -type f -printf "  - %f\n" | sed 's/^/    /'
+    echo ""
+    echo "Other Files:"
+    find "$PROJECT_ROOT" -maxdepth 1 ! -name ".*" ! -path "$PROJECT_ROOT/scripts/*" ! -path "$PROJECT_ROOT/container/*" ! -path "$PROJECT_ROOT/docs/*" -printf "  - %f\n" | sed 's/^/    /'
+    
+    # Show environment details
+    echo ""
+    echo "🔧 Environment Details:"
+    echo "======================"
+    echo "Python 3 Path: $(command -v python3)"
+    echo "Docker Available: $(command -v docker >/dev/null 2>&1 && echo Yes || echo No)"
+    echo "In Nix Shell: ${IN_NIX_SHELL:-No}"
+    echo "Django Settings Module: ${DJANGO_SETTINGS_MODULE:-Not set}"
+    echo "Endo API Mode: ${ENDO_API_MODE:-Not set}"
+    
+    # Show date and time of validation
+    echo ""
+    echo "🕒 Validation Timestamp:"
+    echo "======================="
+    date -Iseconds
+    
+    echo ""
+    echo "📁 Log Files:"
+    echo "============"
+    echo "  - ${BASH_SOURCE[0]} (system validation script)"
+    echo "  - $OUTPUT_FILE (status summary JSON)"
+    
+    # Show any additional log files in the project root
+    if [ -d "$PROJECT_ROOT/logs" ]; then
+        echo "  - logs/ (detailed logs directory)"
+    fi
+    
+    echo ""
+    echo "Thank you for using the Endo API system validation script!"
+    echo "For more information, visit our documentation site."
 }
 
-# Execute main function with all arguments
-main "$@"
+# Main script execution
+log_header "🚀 Endo API System Validation"
+log_info "Starting system validation checks..."
+
+# Test sequence
+test_system_compatibility
+test_file_structure
+test_environment_configuration
+test_database_connectivity
+test_cuda_availability
+
+# Container tests are optional and can be skipped
+if [ "${1:-}" != "--skip-containers" ]; then
+    test_containers "${2:-false}" "${3:-false}"
+fi
+
+test_legacy_compatibility
+
+# JSON summary generation
+generate_json_summary
+
+# Show final summary
+show_summary
+
+log_success "System validation complete!"

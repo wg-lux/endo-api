@@ -59,45 +59,66 @@ def get_db_credentials():
     }
 
 
+def _prepare_conn_kwargs(creds: dict) -> dict:
+    """Prepare connection kwargs for psycopg/psycopg2 compatibility.
+
+    psycopg (v3) expects 'dbname' instead of 'database'. This helper
+    normalizes the keys to avoid 'invalid connection option "database"'.
+    """
+    if creds is None:
+        return {}
+    kw = creds.copy()
+    # Map 'database' -> 'dbname' for psycopg
+    if 'database' in kw and 'dbname' not in kw:
+        kw['dbname'] = kw.pop('database')
+    # Ensure port is a string (both drivers accept str/int, but keep consistent)
+    if 'port' in kw:
+        kw['port'] = str(kw['port'])
+    return kw
+
+
 def test_postgres_connection():
     """Test PostgreSQL database connection."""
     print("🔗 Testing PostgreSQL connection...")
     
     credentials = get_db_credentials()
-    if not credentials:
-        print("❌ Could not load database credentials")
-        return True
+    # Fail if credentials could not be loaded
+    assert credentials, "Could not load database credentials"
     
-    if not credentials["password"]:
-        print("⚠️  Database password not available - skipping connection test")
-        return True  # Not a failure, just skip
+    # Skip if password not available (intended skip)
+    if not credentials.get("password"):
+        pytest.skip("Database password not available - skipping connection test")
     
     try:
-        import psycopg2
-        
-        print(f"   Connecting to: {credentials['user']}@{credentials['host']}:{credentials['port']}/{credentials['database']}")
-        
-        connection = psycopg2.connect(**credentials)
-        
-        # Test basic query
+        import psycopg
+        try:
+            # psycopg provides SQL helpers in a submodule; import as psql alias
+            from psycopg import sql as psql
+        except Exception:
+            # Fallback if the above import style isn't available in the environment
+            import psycopg.sql as psql
+    except ImportError:
+        pytest.skip("psycopg not available - install with: pip install psycopg-binary")
+
+    try:
+        # Prepare and normalize connection kwargs
+        conn_kwargs = _prepare_conn_kwargs(credentials)
+        # Show the normalized connection target (psycopg expects 'dbname')
+        normalized_db = conn_kwargs.get('dbname') or conn_kwargs.get('database') or '<unknown>'
+        print(f"   Connecting to: {credentials['user']}@{credentials['host']}:{conn_kwargs.get('port')}/{normalized_db}")
+        connection = psycopg.connect(**conn_kwargs)
         cursor = connection.cursor()
-        cursor.execute("SELECT version();")
+        # Use psycopg.sql.SQL to satisfy the static type checker
+        cursor.execute(psql.SQL("SELECT version();"))
         version = cursor.fetchone()
-        
         cursor.close()
         connection.close()
-        
+
         print("✅ PostgreSQL connection successful")
         if version:
             print(f"   Database version: {version[0]}")
-        return True
-        
-    except ImportError:
-        print("⚠️  psycopg2 not available - install with: pip install psycopg2-binary")
-        return True  # Not a failure, just unavailable
     except Exception as e:
-        print(f"❌ PostgreSQL connection failed: {e}")
-        return False
+        pytest.fail(f"PostgreSQL connection failed: {e}")
 
 
 def test_database_tables():
@@ -105,16 +126,23 @@ def test_database_tables():
     print("📊 Testing database tables...")
     
     credentials = get_db_credentials()
-    if not credentials or not credentials["password"]:
-        print("⚠️  Database credentials not available - skipping table check")
-        return True
+    if not credentials or not credentials.get("password"):
+        pytest.skip("Database credentials not available - skipping table check")
     
     try:
-        import psycopg2
-        
-        connection = psycopg2.connect(**credentials)
+        import psycopg
+        try:
+            from psycopg import sql as psql
+        except Exception:
+            import psycopg.sql as psql
+    except ImportError:
+        pytest.skip("psycopg not available - skipping table check")
+
+    try:
+        conn_kwargs = _prepare_conn_kwargs(credentials)
+        connection = psycopg.connect(**conn_kwargs)
         cursor = connection.cursor()
-        
+
         # Check for essential Django tables
         essential_tables = [
             'django_migrations',
@@ -124,43 +152,34 @@ def test_database_tables():
             'auth_permission'
         ]
         
-        cursor.execute("""
+        # Use SQL object to avoid passing plain str to cursor.execute
+        cursor.execute(psql.SQL("""
             SELECT table_name 
             FROM information_schema.tables 
             WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
-        """)
+        """))
         
         existing_tables = [row[0] for row in cursor.fetchall()]
         
-        missing_tables = []
-        for table in essential_tables:
-            if table not in existing_tables:
-                missing_tables.append(table)
+        missing_tables = [t for t in essential_tables if t not in existing_tables]
         
         cursor.close()
         connection.close()
         
         if missing_tables:
-            print(f"⚠️  Missing essential Django tables: {missing_tables}")
-            print("   Run 'python manage.py migrate' to create missing tables")
+            pytest.fail(f"Missing essential Django tables: {missing_tables}. Run 'python manage.py migrate' to create missing tables")
         else:
             print(f"✅ Essential Django tables exist ({len(essential_tables)} checked)")
-            
+
         # Show some application tables
         app_tables = [t for t in existing_tables if not t.startswith(('django_', 'auth_'))]
         if app_tables:
             print(f"   Found {len(app_tables)} application tables")
             if len(app_tables) <= 10:
                 print(f"   Tables: {', '.join(app_tables)}")
-        
-        return True
-        
-    except ImportError:
-        print("⚠️  psycopg2 not available")
-        return True
+
     except Exception as e:
-        print(f"❌ Database table check failed: {e}")
-        return False
+        pytest.fail(f"Database table check failed: {e}")
 
 
 def test_django_migration_status():
@@ -191,33 +210,19 @@ def test_django_migration_status():
         )
         
         if result.returncode != 0:
-            print(f"⚠️  Could not check migrations: {result.stderr}")
-            return True  # Not a failure
-        
+            pytest.skip(f"Could not check migrations: {result.stderr}")
+
         migration_output = result.stdout
-        
-        # Check for unapplied migrations
         unapplied = [line for line in migration_output.split('\n') 
                    if line.strip().startswith('[ ]')]
         
         if unapplied:
-            print(f"⚠️  Found {len(unapplied)} unapplied migrations")
-            if len(unapplied) <= 5:
-                for migration in unapplied:
-                    print(f"     {migration.strip()}")
-            else:
-                for migration in unapplied[:3]:
-                    print(f"     {migration.strip()}")
-                print(f"     ... and {len(unapplied) - 3} more")
-            print("   Run 'python manage.py migrate' to apply them")
+            pytest.fail(f"Found {len(unapplied)} unapplied migrations. Run 'python manage.py migrate' to apply them")
         else:
             print("✅ All migrations are applied")
-        
-        return True
-        
+
     except Exception as e:
-        print(f"⚠️  Migration check failed: {e}")
-        return True  # Not a critical failure
+        pytest.skip(f"Migration check failed: {e}")
 
 
 def test_database_permissions():
@@ -225,14 +230,21 @@ def test_database_permissions():
     print("🔐 Testing database permissions...")
     
     credentials = get_db_credentials()
-    if not credentials or not credentials["password"]:
-        print("⚠️  Database credentials not available - skipping permissions check")
-        return True
+    if not credentials or not credentials.get("password"):
+        pytest.skip("Database credentials not available - skipping permissions check")
     
     try:
-        import psycopg2
-        
-        connection = psycopg2.connect(**credentials)
+        import psycopg
+        try:
+            from psycopg import sql as psql
+        except Exception:
+            import psycopg.sql as psql
+    except ImportError:
+        pytest.skip("psycopg not available - skipping permissions check")
+
+    try:
+        conn_kwargs = _prepare_conn_kwargs(credentials)
+        connection = psycopg.connect(**conn_kwargs)
         cursor = connection.cursor()
         
         # Test basic permissions with a unique table name
@@ -240,44 +252,51 @@ def test_database_permissions():
         test_table = f"test_perm_table_{int(time.time())}"
         
         permissions_tests = [
-            ("CREATE TABLE", f"CREATE TEMP TABLE {test_table} (id INTEGER)"),
-            ("INSERT", f"INSERT INTO {test_table} VALUES (1)"),
-            ("SELECT", f"SELECT * FROM {test_table}"),
-            ("UPDATE", f"UPDATE {test_table} SET id = 2"),
-            ("DELETE", f"DELETE FROM {test_table}"),
-            ("DROP TABLE", f"DROP TABLE {test_table}"),
+            ("CREATE TABLE", None),
+            ("INSERT", None),
+            ("SELECT", None),
+            ("UPDATE", None),
+            ("DELETE", None),
+            ("DROP TABLE", None),
         ]
         
         failed_permissions = []
         
-        for perm_name, sql in permissions_tests:
-            try:
-                cursor.execute(sql)
-                connection.commit()
-            except Exception as e:
-                failed_permissions.append((perm_name, str(e)))
-                connection.rollback()
-                break  # Stop on first failure to avoid cascade errors
-        
+        # Build and run each permission check using psycopg.sql to keep typing happy
+        try:
+            # CREATE TEMP TABLE
+            cursor.execute(psql.SQL("CREATE TEMP TABLE {} (id INTEGER)").format(psql.Identifier(test_table)))
+            connection.commit()
+            # INSERT
+            cursor.execute(psql.SQL("INSERT INTO {} (id) VALUES (%s)").format(psql.Identifier(test_table)), (1,))
+            connection.commit()
+            # SELECT
+            cursor.execute(psql.SQL("SELECT * FROM {}").format(psql.Identifier(test_table)))
+            _ = cursor.fetchall()
+            # UPDATE
+            cursor.execute(psql.SQL("UPDATE {} SET id = %s").format(psql.Identifier(test_table)), (2,))
+            connection.commit()
+            # DELETE
+            cursor.execute(psql.SQL("DELETE FROM {} WHERE id = %s").format(psql.Identifier(test_table)), (2,))
+            connection.commit()
+            # DROP TABLE
+            cursor.execute(psql.SQL("DROP TABLE {}").format(psql.Identifier(test_table)))
+            connection.commit()
+        except Exception as e:
+            failed_permissions.append(("permissions", str(e)))
+            connection.rollback()
+ 
         cursor.close()
         connection.close()
         
         if failed_permissions:
-            print("❌ Failed permissions tests:")
-            for perm, error in failed_permissions:
-                print(f"   {perm}: {error}")
-            return False
+            msg = "Failed permissions tests: " + ", ".join(f"{p[0]}: {p[1]}" for p in failed_permissions)
+            pytest.fail(msg)
         else:
             print(f"✅ Database permissions OK ({len(permissions_tests)} tests passed)")
         
-        return True
-        
-    except ImportError:
-        print("⚠️  psycopg2 not available")
-        return True
     except Exception as e:
-        print(f"❌ Database permissions test failed: {e}")
-        return False
+        pytest.fail(f"Database permissions test failed: {e}")
 
 
 def main():
@@ -296,25 +315,35 @@ def main():
     
     passed = 0
     failed = 0
+    skipped = 0
     
     for test_name, test_func in tests:
         print(f"--- {test_name} ---")
         try:
-            if test_func():
-                passed += 1
-            else:
-                failed += 1
+            # Tests are written as pytest-style functions that assert/skip/fail.
+            # When called directly they return None on success, and raise an
+            # exception on skip or failure. We treat exceptions whose class
+            # name contains 'skip' as skipped to avoid depending on pytest's
+            # internal exception class name in static analysis.
+            test_func()
+            passed += 1
         except Exception as e:
-            print(f"❌ Test {test_name} crashed: {e}")
-            failed += 1
+            ename = e.__class__.__name__.lower()
+            if 'skip' in ename:
+                print(f"⚠️  Test {test_name} skipped: {e}")
+                skipped += 1
+            else:
+                print(f"❌ Test {test_name} failed: {e}")
+                failed += 1
         print()
     
     print("=" * 60)
     print("DATABASE TEST SUMMARY")
     print("=" * 60)
     print(f"Passed: {passed}")
+    print(f"Skipped: {skipped}")
     print(f"Failed: {failed}")
-    print(f"Total:  {passed + failed}")
+    print(f"Total:  {passed + failed + skipped}")
     
     if failed == 0:
         print("🎉 ALL DATABASE TESTS PASSED!")

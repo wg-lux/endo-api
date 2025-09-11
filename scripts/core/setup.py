@@ -31,6 +31,10 @@ class EnvironmentSetup:
         self.force = force
         self.status_only = status_only
         self.default_db_password = "changeme_in_production"
+        
+        # Calculate project root (2 levels up from scripts/core/setup.py)
+        self.project_root = Path(__file__).resolve().parents[2]
+        
         self.status = {
             "config_dir": False,
             "db_pwd_file": False,
@@ -111,7 +115,7 @@ class EnvironmentSetup:
             "IMPORT_VIDEO_DIR": "data/import/video", 
             "IMPORT_REPORT_DIR": "data/import/report",
             "MODEL_DIR": "data/model",
-            "CONF_TEMPLATE_DIR": "./conf_template",
+            "CONF_TEMPLATE_DIR": str(self.project_root / "conf_template"),
             "STORAGE_DIR": "data/storage"
         }
         
@@ -189,7 +193,7 @@ class EnvironmentSetup:
         if self.status_only or not self.nix_paths:
             return False
             
-        env_template = self.nix_paths.get("CONF_TEMPLATE_DIR", Path("./conf_template")) / "default.env"
+        env_template = self.nix_paths.get("CONF_TEMPLATE_DIR", self.project_root / "conf_template") / "default.env"
         env_target = Path(".env")
         
         print("🌍 Setting up .env file...")

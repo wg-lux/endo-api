@@ -51,7 +51,7 @@ docker build -f container/Dockerfile.prod -t endo-api-prod .
 # Run production container
 docker run -p 8118:8118 \
   -e DJANGO_SECRET_KEY="your-secret-key" \
-  -e DB_CONFIG_FILE="/app/conf/db.yaml" \
+  -e DATABASE_URL="postgresql://user:pass@host:5432/dbname" \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/conf:/app/conf \
   endo-api-prod
@@ -113,7 +113,7 @@ docker run --rm -p 8118:8118 \
 - `DATABASE_ENGINE` - Database engine (default: sqlite)
 
 ### Production Specific
-- `DB_CONFIG_FILE` - Database configuration file path
+- Provide database configuration via `DATABASE_URL` or DB_* environment variables (DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
 - `DJANGO_ALLOWED_HOSTS` - Comma-separated allowed hosts
 - Security settings automatically configured
 

@@ -45,7 +45,6 @@ let
     CONF_DIR = confDir; 
     CONF_TEMPLATE_DIR = confTemplateDir;
     DB_PWD_FILE = "${confDir}/db_pwd";
-    DB_CONFIG_FILE = "${confDir}/db.yaml";
     # WORKING_DIR is derived at runtime from the shell context
     HOME_DIR = homeDir;
     BASE_URL = "http://${host}:${port}";

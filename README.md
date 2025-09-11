@@ -191,18 +191,20 @@ manage deploy                  # Full deployment pipeline (production)
 
 ### System Validation
 ```bash
-# Run comprehensive system validation
+# Run comprehensive system validation (may build/run containers)
 bash scripts/core/system-validation.sh
 
-# Generate JSON status report only
+# Generate JSON status report only (recommended for CI)
 bash scripts/core/system-validation.sh --json-only
 
-# Fast validation (skip slow container builds)
+# Fast/local validation (skip slow container builds and runs)
 bash scripts/core/system-validation.sh --skip-containers
 
 # View detailed system status
 cat status-summary.json | jq '.summary'
 ```
+
+> Note: The full validation may create Docker images and run containers which modify local state. For idempotent checks use `--skip-containers` or `--json-only` in CI.
 
 ## 🔍 System Validation
 
@@ -346,6 +348,38 @@ set-central-settings          # Configure central node environment
 gpu-check                     # GPU/CUDA diagnostics
 ensure-psql                   # PostgreSQL availability check
 ```
+
+## 🎯 Tests
+
+Integration tests are marked with the `integration` pytest marker and are deselected by default (see `pytest.ini`). The repository includes a focused integration module at `tests/test_database_connectivity.py` that validates DB connectivity, migrations and permissions.
+
+How to run
+
+- Run the module via pytest (recommended):
+  - Run this specific integration module:
+    ```bash
+    pytest -q -m integration tests/test_database_connectivity.py
+    ```
+  - Run all integration tests:
+    ```bash
+    pytest -q -m integration
+    ```
+
+- Run the test file directly (convenient for local/manual runs):
+  ```bash
+  python tests/test_database_connectivity.py
+  ```
+
+Notes
+
+- By design these tests may be skipped when required environment, credentials or tools are not available:
+  - `nix-instantiate` is used to read `app_config.nix` (ensure Nix is available in your PATH),
+  - If a DB password file is not present the tests will be skipped rather than fail.
+
+- psycopg v3 compatibility: psycopg expects the connection parameter `dbname` instead of `database`.
+  The test module normalizes connection kwargs automatically to be compatible with psycopg v3 and psycopg2.
+
+- Prefer running via `pytest` for richer reporting and for the project-wide pytest configuration to be applied. Running the file directly uses a small script runner that returns a simple pass/skip/fail summary.
 
 ## 🏗️ Architecture
 

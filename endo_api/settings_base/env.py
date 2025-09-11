@@ -4,6 +4,7 @@ import base64
 import tempfile
 from urllib.parse import urlparse, unquote
 from typing import Any, Dict, List
+from pathlib import Path
 
 
 def _warn(msg: str) -> None:
@@ -77,20 +78,46 @@ def security_flags() -> Dict[str, bool]:
     }
 
 
-def _db_options_from_env() -> Dict[str, Any]:
-    # JSON override takes precedence
+def _db_options_from_env(engine: str, url_opts: dict | None = None) -> Dict[str, Any]:
+    """Build DB driver options from environment, JSON override, and URL query options.
+
+    Priority (highest -> lowest):
+      1. DJANGO_DB_OPTIONS (JSON) - explicit override
+      2. Environment-derived values (DB_SSLMODE, DB_SSLROOTCERT, DB_SSLCERT, DB_SSLKEY or their _B64 variants)
+      3. Options parsed from the DATABASE_URL query string (url_opts)
+
+    The returned keys are engine-aware. For Postgres we emit libpq-style keys
+    (sslmode, sslrootcert, sslcert, sslkey, options, target_session_attrs).
+    For MySQL we place TLS material under a top-level 'ssl' dict with keys
+    'ca','cert','key' (and other MySQL-specific params preserved).
+    """
+    # JSON override takes precedence; parse but keep as base to merge env/file values
     options_raw = os.environ.get("DJANGO_DB_OPTIONS")
     if options_raw:
         try:
-            return json.loads(options_raw)
-        except Exception as exc:  # noqa: BLE001
-            raise ValueError("DJANGO_DB_OPTIONS must be valid JSON") from exc
+            try:
+                json_opts = json.loads(options_raw)
+            except Exception as exc:  # noqa: BLE001
+                raise ValueError("DJANGO_DB_OPTIONS must be valid JSON") from exc
+        except Exception:
+            # If JSON parsing fails upstream, propagate useful error
+            raise
+    else:
+        json_opts = {}
 
-    opts: Dict[str, Any] = {}
+    # start from JSON-provided options
+    opts: Dict[str, Any] = dict(json_opts or {})
 
+    # Env-level simple override
     sslmode = os.environ.get("DB_SSLMODE")
     if sslmode:
-        opts["sslmode"] = sslmode
+        if engine.startswith("django.db.backends.postgresql"):
+            opts.setdefault("sslmode", sslmode)
+        else:
+            # MySQL uses ssl options under 'ssl' dict
+            if "ssl" not in opts:
+                opts["ssl"] = {}
+            opts["ssl"].setdefault("mode", sslmode)
 
     def _maybe_write_b64(env_key: str, suffix: str) -> str | None:
         b64_val = os.environ.get(env_key)
@@ -102,18 +129,115 @@ def _db_options_from_env() -> Dict[str, Any]:
             f.write(data)
         return path
 
+    # Files from explicit env vars or b64 variants
     rootcert = os.environ.get("DB_SSLROOTCERT") or _maybe_write_b64("DB_SSLROOTCERT_B64", ".crt")
     cert = os.environ.get("DB_SSLCERT") or _maybe_write_b64("DB_SSLCERT_B64", ".crt")
     key = os.environ.get("DB_SSLKEY") or _maybe_write_b64("DB_SSLKEY_B64", ".key")
 
-    if rootcert:
-        opts["sslrootcert"] = rootcert
-    if cert:
-        opts["sslcert"] = cert
-    if key:
-        opts["sslkey"] = key
+    if engine.startswith("django.db.backends.postgresql"):
+        if rootcert:
+            opts.setdefault("sslrootcert", rootcert)
+        if cert:
+            opts.setdefault("sslcert", cert)
+        if key:
+            opts.setdefault("sslkey", key)
+    else:
+        # MySQL: place TLS materials under ssl dict
+        if rootcert or cert or key:
+            if "ssl" not in opts:
+                opts["ssl"] = {}
+            if rootcert:
+                opts["ssl"].setdefault("ca", rootcert)
+            if cert:
+                opts["ssl"].setdefault("cert", cert)
+            if key:
+                opts["ssl"].setdefault("key", key)
+
+    # Merge URL-derived options (lowest priority) only where not already set
+    if url_opts:
+        if engine.startswith("django.db.backends.postgresql"):
+            for k in ("sslmode", "sslrootcert", "sslcert", "sslkey", "options", "target_session_attrs"):
+                v = url_opts.get(k)
+                if v is not None and k not in opts:
+                    opts[k] = v
+        elif engine.startswith("django.db.backends.mysql"):
+            # url_opts may contain 'ssl' dict or top-level mysql params
+            u_ssl = url_opts.get("ssl") if isinstance(url_opts.get("ssl"), dict) else {}
+            if u_ssl:
+                if "ssl" not in opts:
+                    opts["ssl"] = {}
+                for subk, subv in u_ssl.items():
+                    if subk not in opts["ssl"]:
+                        opts["ssl"][subk] = subv
+            for k, v in url_opts.items():
+                if k == "ssl":
+                    continue
+                if k not in opts:
+                    opts[k] = v
+        else:
+            # default: shallow merge for unknown engines
+            for k, v in url_opts.items():
+                opts.setdefault(k, v)
 
     return opts
+
+
+def _parse_db_url_query_options(query: str, engine: str) -> Dict[str, Any]:
+    """Parse DATABASE_URL query string into engine-aware option dict.
+
+    - For Postgres: return libpq-style keys where applicable.
+    - For MySQL: return a dict with a top-level 'ssl' mapping for TLS files.
+    """
+    from urllib.parse import parse_qs
+
+    if not query:
+        return {}
+    qs = parse_qs(query, keep_blank_values=True)
+
+    # helper to pick first value
+    def _first(key: str):
+        return qs.get(key, [None])[-1]
+
+    if engine.startswith("django.db.backends.postgresql"):
+        allowed = {
+            "sslmode",
+            "sslrootcert",
+            "sslcert",
+            "sslkey",
+            "options",
+            "target_session_attrs",
+        }
+        out: Dict[str, Any] = {}
+        for k in allowed:
+            v = _first(k)
+            if v is not None:
+                out[k] = v
+        return out
+
+    if engine.startswith("django.db.backends.mysql"):
+        # common mappings for MySQL DSNs
+        ssl_mapping = {
+            "ssl-ca": "ca",
+            "ssl-cert": "cert",
+            "ssl-key": "key",
+            "ssl-mode": "mode",
+        }
+        out: Dict[str, Any] = {}
+        ssl: Dict[str, Any] = {}
+        for qk, dest in ssl_mapping.items():
+            v = _first(qk)
+            if v is not None:
+                ssl[dest] = v
+        if ssl:
+            out["ssl"] = ssl
+        # preserve other common params
+        for k in ("charset", "collation"):
+            v = _first(k)
+            if v is not None:
+                out[k] = v
+        return out
+
+    return {}
 
 
 def _engine_from_scheme(scheme: str) -> str:
@@ -133,9 +257,11 @@ def db_config() -> Dict[str, Dict[str, Any]]:
     Rules:
     - Prefer DATABASE_URL
     - Else DB_ENGINE/DB_NAME/DB_USER/DB_PASSWORD/DB_HOST/DB_PORT
-    - DB_CONFIG_FILE is removed; not supported.
+
+    DB_CONFIG_FILE support has been removed; provide DATABASE_URL or DB_* env vars.
     """
     db_from_url = os.environ.get("DATABASE_URL")
+    url_opts = None
     if db_from_url:
         parsed = urlparse(db_from_url)
         db_name = parsed.path.lstrip("/") or os.environ.get("DB_NAME")
@@ -144,6 +270,8 @@ def db_config() -> Dict[str, Dict[str, Any]]:
         db_host = parsed.hostname or os.environ.get("DB_HOST")
         db_port = str(parsed.port) if parsed.port else os.environ.get("DB_PORT")
         db_engine = _engine_from_scheme(parsed.scheme)
+        # parse query options engine-aware
+        url_opts = _parse_db_url_query_options(parsed.query, db_engine)
     elif os.environ.get("DB_NAME"):
         db_engine = os.environ.get("DB_ENGINE", "django.db.backends.postgresql")
         db_name = os.environ.get("DB_NAME")
@@ -151,9 +279,10 @@ def db_config() -> Dict[str, Dict[str, Any]]:
         db_password = os.environ.get("DB_PASSWORD")
         db_host = os.environ.get("DB_HOST", "localhost")
         db_port = os.environ.get("DB_PORT", "5432")
+        url_opts = None
     else:
         raise ValueError(
-            "Database configuration missing. Provide DATABASE_URL or DB_* env vars."
+            "Database configuration missing. Provide DATABASE_URL or DB_* environment variables."
         )
 
     return {
@@ -164,6 +293,6 @@ def db_config() -> Dict[str, Dict[str, Any]]:
             "PASSWORD": db_password,
             "HOST": db_host,
             "PORT": db_port,
-            "OPTIONS": _db_options_from_env() or {},
+            "OPTIONS": _db_options_from_env(db_engine, url_opts) or {},
         }
     }

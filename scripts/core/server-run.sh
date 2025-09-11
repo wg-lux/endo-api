@@ -7,10 +7,15 @@
 set -eo pipefail
 
 # Detect env: prefer .mode, fallback to DJANGO_ENV, default development
-if [ -f .mode ] && MODE_FILE=$(cat .mode 2>/dev/null | tr -d '\n' | tr -d ' '); then
-  export DJANGO_ENV=${MODE_FILE:-development}
+if [ -f .mode ]; then
+  read -r mode_value < .mode 2>/dev/null || mode_value=""
+  # Strip CR/LF and surrounding whitespace
+  mode_value="${mode_value%$'\r'}"  # Remove trailing CR
+  mode_value="${mode_value#"${mode_value%%[![:space:]]*}"}"  # Remove leading whitespace
+  mode_value="${mode_value%"${mode_value##*[![:space:]]}"}"  # Remove trailing whitespace
+  export DJANGO_ENV="${mode_value:-development}"
 else
-  export DJANGO_ENV=${DJANGO_ENV:-development}
+  export DJANGO_ENV="${DJANGO_ENV:-development}"
 fi
 
 # Runtime configuration (favor environment to avoid rebuilds)
@@ -28,14 +33,14 @@ echo ""
 if [ ! -f ".env" ]; then
   echo "📝 Environment file missing, running setup..."
   if command -v manage >/dev/null 2>&1; then
-    manage setup
+    manage setup || { echo "❌ Setup failed"; exit 1; }
   else
     if command -v uv >/dev/null 2>&1; then
-      uv run python scripts/core/setup.py || true
-      uv run python scripts/database/make_conf.py || true
+      uv run python scripts/core/setup.py || { echo "❌ Setup failed"; exit 1; }
+      uv run python scripts/database/make_conf.py || { echo "❌ Database configuration failed"; exit 1; }
     else
-      python scripts/core/setup.py || true
-      python scripts/database/make_conf.py || true
+      python scripts/core/setup.py || { echo "❌ Setup failed"; exit 1; }
+      python scripts/database/make_conf.py || { echo "❌ Database configuration failed"; exit 1; }
     fi
   fi
 fi
