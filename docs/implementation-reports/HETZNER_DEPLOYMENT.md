@@ -105,6 +105,10 @@ If image missing, check:
 grep build -n Makefile
 ```
 
+*Note*
+Our image is quite large, therefore nginx initially refused to upload it over 100MB. We had to adjust the `client_max_body_size` in the nginx config of our registry server and reload nginx.
+See [ingress_nginx_docker.yaml](./ingress_nginx_docker.yaml) for an example.
+
 ### Phase 5: Namespace, ConfigMap, Secrets
 ```bash
 kubectl create ns endo-api || true
@@ -138,13 +142,51 @@ kubectl -n endo-api rollout restart deploy/endo-api
 
 ```
 
+get pod names:
+```bash
+kubectl -n endo-api get pods -l app=endo-api --sort-by=.metadata.creationTimestamp -o wide
+```
+
+delete Hanging pods:
+```bash
+kubectl -n endo-api delete pod <old-pod-name>
+```
+
+### Phase 6.5: Verify Django environment (settings, hosts, CSRF)
+Ensure the app uses production settings and CSRF is configured for your public host.
+
+- Check effective env inside the pod:
+```bash
+kubectl -n endo-api exec deploy/endo-api -- printenv | grep -E 'DJANGO_SETTINGS_MODULE|DJANGO_ENV|DJANGO_DEBUG'
+# Expect: DJANGO_SETTINGS_MODULE=endo_api.settings_prod
+```
+- Confirm ALLOWED_HOSTS contains your public host:
+```bash
+kubectl -n endo-api get configmap endo-api-config -o jsonpath='{.data.DJANGO_ALLOWED_HOSTS}{"\n"}'
+```
+- Configure CSRF trusted origins (Django 4+ requires scheme):
+```bash
+export DJANGO_CSRF_TRUSTED_ORIGINS="https://${HOSTNAME_PUBLIC}"
+kubectl -n endo-api patch configmap endo-api-config --type merge \
+  -p '{"data":{"DJANGO_CSRF_TRUSTED_ORIGINS":"'"${DJANGO_CSRF_TRUSTED_ORIGINS}"'"}}'
+# Optionally enforce secure cookies/redirect when using HTTPS
+kubectl -n endo-api patch configmap endo-api-config --type merge \
+  -p '{"data":{"DJANGO_SECURE_SSL_REDIRECT":"true","DJANGO_SESSION_COOKIE_SECURE":"true","DJANGO_CSRF_COOKIE_SECURE":"true"}}'
+# Restart to pick up ConfigMap changes
+kubectl -n endo-api rollout restart deploy/endo-api
+kubectl -n endo-api rollout status deploy/endo-api
+```
+- Verify env from inside the pod:
+```bash
+kubectl -n endo-api exec deploy/endo-api -- printenv | grep -E 'DJANGO_CSRF_TRUSTED_ORIGINS|DJANGO_SECURE_SSL_REDIRECT'
+```
+
 ### Phase 7: In-Pod Health Probe
 ```bash
 kubectl -n endo-api exec deploy/endo-api -- curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8118/ || echo "probe-failed"
 ```
 
 ### Phase 8: Ingress & TLS Validation
-(If cert-manager used and ingress created)
 ```bash
 kubectl -n endo-api get ingress
 kubectl -n endo-api describe ingress

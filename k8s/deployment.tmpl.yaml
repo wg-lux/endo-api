@@ -32,21 +32,33 @@ spec:
             httpGet:
               path: /
               port: 8118
-            initialDelaySeconds: 10
+              httpHeaders:
+                - name: Host
+                  value: endo-api.endo-api.svc.cluster.local
+            initialDelaySeconds: 20
             periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+            successThreshold: 1
           livenessProbe:
             httpGet:
               path: /
               port: 8118
-            initialDelaySeconds: 30
+              httpHeaders:
+                - name: Host
+                  value: endo-api.endo-api.svc.cluster.local
+            initialDelaySeconds: 60
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
               cpu: "1"
-              memory: 1Gi
+              memory: 4Gi
+            limits:
+              cpu: "3"
+              memory: 16Gi
           volumeMounts:
             - name: data
               mountPath: /app/data

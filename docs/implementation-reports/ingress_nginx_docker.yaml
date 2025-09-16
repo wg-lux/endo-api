@@ -1,0 +1,68 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    field.cattle.io/publicEndpoints: >-
+      [{"addresses":["10.43.25.114"],"port":443,"protocol":"HTTPS","serviceName":"registry:docker-registry","ingressName":"registry:registry","hostname":"moose1.xulutions.net","path":"/","allNodes":false}]
+    nginx.ingress.kubernetes.io/whitelist-source-range: 10.0.0.0/8, 213.133.99.8
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "900"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "900"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+
+  creationTimestamp: '2025-09-10T09:21:52Z'
+  generation: 2
+  managedFields:
+    - apiVersion: networking.k8s.io/v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:loadBalancer:
+            f:ingress: {}
+      manager: nginx-ingress-controller
+      operation: Update
+      subresource: status
+      time: '2025-09-10T09:22:10Z'
+    - apiVersion: networking.k8s.io/v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:field.cattle.io/publicEndpoints: {}
+            f:nginx.ingress.kubernetes.io/whitelist-source-range: {}
+        f:spec:
+          f:ingressClassName: {}
+          f:rules: {}
+          f:tls: {}
+      manager: rancher
+      operation: Update
+      time: '2025-09-10T09:23:23Z'
+  name: registry
+  namespace: registry
+  resourceVersion: '3924805'
+  uid: 2de1b919-df97-455a-997e-f4fbf18e6cb9
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: moose1.xulutions.net
+      http:
+        paths:
+          - backend:
+              service:
+                name: docker-registry
+                port:
+                  number: 5000
+            path: /
+            pathType: ImplementationSpecific
+            # path: /v2/
+            # pathType: Prefix
+  tls:
+    - hosts:
+        - moose1.xulutions.net
+      secretName: registry-tls-secret
+status:
+  loadBalancer:
+    ingress:
+      - ip: 10.43.25.114

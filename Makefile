@@ -13,9 +13,10 @@ IMAGE_NAME    ?= endo-api
 IMG           ?= $(IMAGE_NAME):$(VERSION)
 NAMESPACE     ?= endo-api
 HOST          ?= endo-api.xulutions.net
+# CSRF Trusted Origins (comma-separated). Defaults to https://<HOST>
+CSRF_ORIGINS  ?= https://$(HOST)
 
 ENGINE        ?= $(shell command -v podman >/dev/null 2>&1 && echo podman || (command -v docker >/dev/null 2>&1 && echo docker))
-NAMESPACE	  ?= endo-api
 CTR_NS        ?= k8s.io
 IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 
@@ -98,6 +99,10 @@ k8s-config: k8s-namespace
 	  --from-literal=DJANGO_DEBUG=false \
 	  --from-literal=DJANGO_ALLOWED_HOSTS="$(HOST),localhost,127.0.0.1,endo-api,endo-api.endo-api.svc,endo-api.endo-api.svc.cluster.local" \
 	  --from-literal=DJANGO_SETTINGS_MODULE="endo_api.settings_prod" \
+	  --from-literal=DJANGO_CSRF_TRUSTED_ORIGINS="$(CSRF_ORIGINS)" \
+	  --from-literal=DJANGO_SECURE_SSL_REDIRECT="true" \
+	  --from-literal=DJANGO_SESSION_COOKIE_SECURE="true" \
+	  --from-literal=DJANGO_CSRF_COOKIE_SECURE="true" \
 	  --dry-run=client -o yaml | kubectl apply -f -
 
 .PHONY: k8s-secrets
