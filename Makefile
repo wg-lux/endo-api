@@ -19,16 +19,15 @@ NAMESPACE	  ?= endo-api
 CTR_NS        ?= k8s.io
 IMAGE_TAR     ?= $(IMAGE_NAME)-$(VERSION).tar
 
-# Optional local/regional registry support
-# Set REGISTRY (host:port) explicitly or auto-detect a Service named 'registry' or 'docker-registry'
-REGISTRY       ?=
-REGISTRY_PORT  ?= 5000
-# Auto-detect registry service (checks for 'registry' or 'docker-registry' services)
-# Use cluster IP instead of DNS name for external Docker access
-REGISTRY_DETECTED := $(shell kubectl get svc docker-registry -n registry -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null)
-REGISTRY_EFFECTIVE := $(if $(strip $(REGISTRY)),$(REGISTRY),$(REGISTRY_DETECTED))
-# Fully qualified image (priority: detected/explicit registry -> docker hub library)
-IMAGE_FQN := $(if $(strip $(REGISTRY_EFFECTIVE)),$(REGISTRY_EFFECTIVE)/$(IMAGE_NAME):$(VERSION),docker.io/library/$(IMAGE_NAME):$(VERSION))
+# External registry configuration (no auto-detection)
+# Provide the Docker registry as host[:port], e.g. moose1.xulutions.net or moose1.xulutions.net:5000
+# Scheme controls validation requests (does not affect image reference). Use https for TLS-enabled registries.
+REGISTRY          ?= moose1.xulutions.net
+REGISTRY_SCHEME   ?= https
+# (Optional) If REGISTRY is empty, images will not be pushed and a local containerd import workflow is used.
+
+# Fully qualified image (priority: explicit registry -> docker hub library)
+IMAGE_FQN := $(if $(strip $(REGISTRY)),$(REGISTRY)/$(IMAGE_NAME):$(VERSION),docker.io/library/$(IMAGE_NAME):$(VERSION))
 BUILD_TS    := $(shell date -u +%Y%m%d%H%M%S)
 
 # Build configuration
@@ -52,11 +51,10 @@ help:
 	@echo "  status          - Show objects/status"
 	@echo ""
 	@echo "Registry Management:"
-	@echo "  debug-registry           - Debug registry detection and configuration"
-	@echo "  configure-docker-registry - Configure Docker for insecure registry"
-	@echo "  registry-auth-info       - Show registry authentication information"
+	@echo "  validate-registry       - Validate that REGISTRY is a reachable Docker Registry (expects HTTP 200 or 401 on /v2/)"
+	@echo "  debug-registry          - Show registry configuration and run validation"
+	@echo "  configure-docker-registry - Configure Docker for insecure HTTP registry (only needed if REGISTRY_SCHEME=http)"
 	@echo "  registry-login          - Login to registry (requires credentials)"
-	@echo "  registry-add-user       - Add new user to registry authentication"
 	@echo "  registry-test           - Test registry connectivity and authentication"
 
 .PHONY: build
@@ -64,13 +62,16 @@ build:
 	@if [ -z "$(ENGINE)" ]; then echo "No container engine (podman|docker) found"; exit 1; fi
 	@echo "Building image $(IMG) (base tag) with $(ENGINE) (DOCKER_BUILDKIT=$(DOCKER_BUILDKIT))"
 	DOCKER_BUILDKIT=$(DOCKER_BUILDKIT) $(ENGINE) build $(BUILD_ARGS) -t $(IMG) -f container/Dockerfile.prod .
-	@if [ -n "$(strip $(REGISTRY_EFFECTIVE))" ]; then \
+	@if [ -n "$(strip $(REGISTRY))" ]; then \
+	  $(MAKE) validate-registry; \
 	  echo "Tagging & pushing to registry: $(IMAGE_FQN)"; \
 	  $(ENGINE) tag $(IMG) $(IMAGE_FQN); \
-	  echo "Note: Adding $(REGISTRY_EFFECTIVE) to Docker daemon's insecure registries if needed..."; \
+	  if [ "$(REGISTRY_SCHEME)" = "http" ]; then \
+	    echo "Note: For HTTP registries you may need to configure Docker's insecure registries"; \
+	  fi; \
 	  $(ENGINE) push $(IMAGE_FQN); \
 	else \
-	  echo "No registry detected (REGISTRY/Service 'registry'). Using local import workflow."; \
+	  echo "No registry configured (REGISTRY is empty). Using local import workflow."; \
 	fi
 
 .PHONY: save
@@ -124,8 +125,8 @@ k8s-secrets: k8s-namespace
 
 .PHONY: assert-image
 assert-image:
-	@if [ -z "$(strip $(REGISTRY_EFFECTIVE))" ]; then \
-		echo "[assert-image] No registry detected (using local import workflow)."; \
+	@if [ -z "$(strip $(REGISTRY))" ]; then \
+		echo "[assert-image] No registry configured (using local import workflow)."; \
 		echo "[assert-image] Verifying image present in containerd namespace $(CTR_NS): $(IMAGE_FQN)"; \
 		if ! sudo ctr -n $(CTR_NS) images ls | awk '{print $$1}' | grep -qx '$(IMAGE_FQN)'; then \
 			echo "[assert-image] MISSING image $(IMAGE_FQN). Run: make save VERSION=$(VERSION) && sudo make load VERSION=$(VERSION)"; \
@@ -133,7 +134,7 @@ assert-image:
 		fi; \
 		echo "[assert-image] Image found."; \
 	else \
-		echo "[assert-image] Registry detected ($(REGISTRY_EFFECTIVE)); cluster will pull image."; \
+		echo "[assert-image] Registry configured ($(REGISTRY)); cluster will pull image."; \
 	fi
 
 .PHONY: deploy
@@ -168,108 +169,70 @@ status:
 .PHONY: image-info
 image-info:
 	@echo "Base tag: $(IMG)"; \
-	 echo "Registry effective: $(REGISTRY_EFFECTIVE)"; \
+	 echo "Registry: $(REGISTRY)"; \
+	 echo "Registry scheme: $(REGISTRY_SCHEME)"; \
 	 echo "Image FQN: $(IMAGE_FQN)";
 
-# Debug registry detection
+# Validate registry
+.PHONY: validate-registry
+validate-registry:
+	@if [ -z "$(strip $(REGISTRY))" ]; then echo "REGISTRY is empty; nothing to validate"; exit 1; fi
+	@echo "Validating registry endpoint: $(REGISTRY_SCHEME)://$(REGISTRY)/v2/"
+	@code=$$(curl -s -o /dev/null -w '%{http_code}' "$(REGISTRY_SCHEME)://$(REGISTRY)/v2/" || echo 000); \
+	 if [ "$$code" = "200" ] || [ "$$code" = "401" ]; then \
+	   echo "✓ Registry reachable (HTTP $$code)"; \
+	 else \
+	   echo "✗ Registry check failed (HTTP $$code)"; exit 1; \
+	 fi
+
+# Debug registry configuration
 .PHONY: debug-registry
 debug-registry:
-	@echo "=== Registry Detection Debug ==="
-	@echo "REGISTRY (manual): $(REGISTRY)"
-	@echo "REGISTRY_DETECTED raw command:"
-	@echo "kubectl get svc docker-registry -n registry -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null"
-	@echo "REGISTRY_DETECTED result: $(REGISTRY_DETECTED)"
-	@echo "REGISTRY_EFFECTIVE: $(REGISTRY_EFFECTIVE)"
-	@echo ""
-	@echo "=== All registry-related services ==="
-	@kubectl get svc -A | grep -i registry || echo "No registry services found"
-	@echo ""
-	@echo "=== Manual test of detection command ==="
-	@kubectl get svc docker-registry -n registry -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null || kubectl get svc registry -A -o jsonpath='{.spec.clusterIP}:{.spec.ports[0].port}' 2>/dev/null
-	@echo ""
-	@echo "=== Docker daemon configuration check ==="
-	@echo "Note: For insecure registry $(REGISTRY_EFFECTIVE), ensure Docker daemon.json includes:"
-	@echo '{"insecure-registries": ["$(REGISTRY_EFFECTIVE)"]}'
+	@echo "=== Registry Configuration Debug ==="
+	@echo "REGISTRY: $(REGISTRY)"
+	@echo "REGISTRY_SCHEME: $(REGISTRY_SCHEME)"
+	@echo "IMAGE_FQN: $(IMAGE_FQN)"
+	@echo "Container engine: $(ENGINE)"
+	@$(MAKE) -s validate-registry || true
 
-# Configure Docker for insecure registry
+# Configure Docker for insecure registry (HTTP)
 .PHONY: configure-docker-registry
 configure-docker-registry:
-	@echo "Configuring Docker for insecure registry $(REGISTRY_EFFECTIVE)"
-	@if [ -z "$(REGISTRY_EFFECTIVE)" ]; then echo "No registry detected"; exit 1; fi
+	@echo "Configuring Docker for insecure registry $(REGISTRY) (scheme=$(REGISTRY_SCHEME))"
+	@if [ "$(REGISTRY_SCHEME)" != "http" ]; then echo "Registry scheme is $(REGISTRY_SCHEME) - insecure Docker configuration is typically NOT required."; fi
+	@if [ -z "$(REGISTRY)" ]; then echo "No registry configured"; exit 1; fi
 	@echo "Creating/updating /etc/docker/daemon.json..."
 	@sudo mkdir -p /etc/docker
 	@if [ -f /etc/docker/daemon.json ]; then \
 		echo "Backing up existing daemon.json..."; \
 		sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.backup.$$(date +%Y%m%d_%H%M%S); \
 	fi
-	@echo '{"insecure-registries": ["$(REGISTRY_EFFECTIVE)"]}' | sudo tee /etc/docker/daemon.json
+	@echo '{"insecure-registries": ["$(REGISTRY)"]}' | sudo tee /etc/docker/daemon.json
 	@echo "Restarting Docker daemon..."
 	@sudo systemctl restart docker
-	@echo "Docker configured for insecure registry: $(REGISTRY_EFFECTIVE)"
+	@echo "Docker configured for insecure registry: $(REGISTRY)"
 
 # Login to registry (if authentication required)
 .PHONY: registry-login
 registry-login:
-	@echo "Logging into registry $(REGISTRY_EFFECTIVE)"
-	@if [ -z "$(REGISTRY_EFFECTIVE)" ]; then echo "No registry detected"; exit 1; fi
-	@echo "Registry uses htpasswd authentication. Available users:"
-	@kubectl get configmap registry-auth -n registry -o jsonpath='{.data.registry\.password}' | cut -d: -f1 || echo "Cannot read registry auth config"
-	@echo ""
-	@echo "Enter username for $(REGISTRY_EFFECTIVE):"
-	@read -r username; \
-	if [ -n "$$username" ]; then \
-		$(ENGINE) login $(REGISTRY_EFFECTIVE) -u "$$username"; \
-	else \
-		echo "No username provided - cannot authenticate"; \
-		exit 1; \
-	fi
-
-# Show registry authentication info
-.PHONY: registry-auth-info
-registry-auth-info:
-	@echo "Registry authentication information:"
-	@echo "Registry URL: $(REGISTRY_EFFECTIVE)"
-	@echo "Authentication method: htpasswd"
-	@echo "Available users:"
-	@kubectl get configmap registry-auth -n registry -o jsonpath='{.data.registry\.password}' 2>/dev/null | cut -d: -f1 || echo "Cannot read registry auth config"
-	@echo ""
-	@echo "To add a new user or reset password, you can:"
-	@echo "1. Update the registry-auth ConfigMap"
-	@echo "2. Or use the registry-add-user target"
-
-# Add new user to registry (requires htpasswd)
-.PHONY: registry-add-user
-registry-add-user:
-	@echo "Adding new user to registry authentication"
-	@if ! command -v htpasswd >/dev/null 2>&1; then \
-		echo "htpasswd command not found. Install apache2-utils: apt-get install apache2-utils"; \
-		exit 1; \
-	fi
-	@echo "Enter new username:"
-	@read -r username; \
-	if [ -z "$$username" ]; then echo "Username required"; exit 1; fi; \
-	echo "Enter password for $$username:"; \
-	read -s password; \
-	if [ -z "$$password" ]; then echo "Password required"; exit 1; fi; \
-	htpasswd_entry=$$(htpasswd -bnB "$$username" "$$password"); \
-	echo "Generated htpasswd entry: $$htpasswd_entry"; \
-	echo ""; \
-	echo "To update the registry, run:"; \
-	echo "kubectl patch configmap registry-auth -n registry --patch '{\"data\":{\"registry.password\":\"$$htpasswd_entry\"}}'"
+	@echo "Logging into registry $(REGISTRY)"
+	@if [ -z "$(REGISTRY)" ]; then echo "No registry configured"; exit 1; fi
+	@$(ENGINE) login $(REGISTRY)
 
 # Check registry connectivity and authentication
 .PHONY: registry-test
 registry-test:
-	@echo "Testing registry connectivity to $(REGISTRY_EFFECTIVE)"
-	@if [ -z "$(REGISTRY_EFFECTIVE)" ]; then echo "No registry detected"; exit 1; fi
+	@echo "Testing registry connectivity to $(REGISTRY)"
+	@if [ -z "$(REGISTRY)" ]; then echo "No registry configured"; exit 1; fi
 	@echo "Testing HTTP connectivity..."
-	@curl -f http://$(REGISTRY_EFFECTIVE)/v2/ 2>/dev/null && echo "✓ Registry accessible" || echo "✗ Registry not accessible"
-	@echo "Testing Docker connectivity..."
+	@curl -fsS $(REGISTRY_SCHEME)://$(REGISTRY)/v2/ >/dev/null 2>&1 && echo "✓ Registry accessible" || echo "Note: /v2/ returned non-2xx (this can be OK if it returns 401)."
+	@code=$$(curl -s -o /dev/null -w '%{http_code}' "$(REGISTRY_SCHEME)://$(REGISTRY)/v2/" || echo 000); echo "HTTP $$code"
+	@echo "Testing image push (hello-world) ..."
 	@$(ENGINE) pull hello-world:latest >/dev/null 2>&1 || true
-	@$(ENGINE) tag hello-world:latest $(REGISTRY_EFFECTIVE)/hello-world:test 2>/dev/null || true
-	@if $(ENGINE) push $(REGISTRY_EFFECTIVE)/hello-world:test >/dev/null 2>&1; then \
+	@$(ENGINE) tag hello-world:latest $(REGISTRY)/hello-world:test 2>/dev/null || true
+	@if $(ENGINE) push $(REGISTRY)/hello-world:test >/dev/null 2>&1; then \
 		echo "✓ Can push to registry"; \
-		$(ENGINE) rmi $(REGISTRY_EFFECTIVE)/hello-world:test >/dev/null 2>&1 || true; \
+		$(ENGINE) rmi $(REGISTRY)/hello-world:test >/dev/null 2>&1 || true; \
 	else \
 		echo "✗ Cannot push to registry - may need authentication"; \
 	fi

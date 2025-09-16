@@ -58,7 +58,7 @@ git log -1 --oneline
 Choose a version tag (do not overwrite an existing pushed tag):
 ```bash
 export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
-export APP_VERSION=1.0.0
+export APP_VERSION=1.0.4
 export HOSTNAME_PUBLIC="endo-api.xulutions.net"   # adjust
 export DJANGO_SECRET_KEY=$(openssl rand -base64 48)
 export POSTGRES_APP_USER="endoreg"
@@ -68,7 +68,12 @@ export DB_PASSWORD=$(cat /tmp/pgpwd.txt)
 export DATABASE_URL="postgresql://${POSTGRES_APP_USER}:${DB_PASSWORD}@endoregdblocal-rw.endopg.svc.cluster.local:5432/endoregDbLocal"
 export DJANGO_ALLOWED_HOSTS="${HOSTNAME_PUBLIC},localhost"
 export DJANGO_DEBUG=false
-printenv | grep -E 'APP_VERSION|DJANGO_|DATABASE_URL'
+
+# Container registry (explicit, no auto-detect)
+export REGISTRY="moose1.xulutions.net"     # or moose1.xulutions.net:5000 if port is non-standard
+export REGISTRY_SCHEME="https"             # use http if your registry is plain HTTP
+
+printenv | grep -E 'APP_VERSION|DJANGO_|DATABASE_URL|REGISTRY'
 
 cat > .deploy.env <<EOF
 KUBECONFIG=${KUBECONFIG}
@@ -78,12 +83,19 @@ DATABASE_URL=${DATABASE_URL}
 DJANGO_ALLOWED_HOSTS=${DJANGO_ALLOWED_HOSTS}
 DJANGO_DEBUG=${DJANGO_DEBUG}
 HOSTNAME_PUBLIC=${HOSTNAME_PUBLIC}
+REGISTRY=${REGISTRY}
+REGISTRY_SCHEME=${REGISTRY_SCHEME}
 EOF
 ```
 
-### Phase 4: Image Build & Load (Local Build → RKE2 containerd)
+### Phase 4: Image Build, Validate Registry & Load (Local Build → RKE2 containerd)
+Validate the registry endpoint before pushing:
 ```bash
-make build VERSION=${APP_VERSION}
+make validate-registry REGISTRY=${REGISTRY} REGISTRY_SCHEME=${REGISTRY_SCHEME}
+```
+Build and push (if REGISTRY is set) or prepare for local import:
+```bash
+make build VERSION=${APP_VERSION} REGISTRY=${REGISTRY} REGISTRY_SCHEME=${REGISTRY_SCHEME}
 make save VERSION=${APP_VERSION}
 sudo make load VERSION=${APP_VERSION}
 sudo ctr -n k8s.io images ls | grep endo-api | grep ${APP_VERSION}
@@ -104,7 +116,6 @@ kubectl get configmap,secret -n endo-api
 ```
 Verify secret keys:
 ```bash
-
 kubectl -n endo-api get secret endo-api-secrets -o jsonpath='{.data.DATABASE_URL}' | base64 -d | sha256sum  
 kubectl -n endo-api get secret endo-api-secrets -o jsonpath='{.data.DJANGO_SECRET_KEY}' | base64 -d | sha256sum  
 echo "Secrets exist (hashes above)."  
@@ -154,7 +165,8 @@ curl -vk https://${HOSTNAME_PUBLIC}/ 2>&1 | grep -Ei 'certificate|HTTP/'
 ### Phase 10: Update Test (Example 1.0.1)
 ```bash
 export APP_VERSION=1.0.1
-make build VERSION=${APP_VERSION}
+make validate-registry REGISTRY=${REGISTRY} REGISTRY_SCHEME=${REGISTRY_SCHEME}
+make build VERSION=${APP_VERSION} REGISTRY=${REGISTRY} REGISTRY_SCHEME=${REGISTRY_SCHEME}
 make save  VERSION=${APP_VERSION}
 sudo make load VERSION=${APP_VERSION}
 make deploy VERSION=${APP_VERSION} HOST=${HOSTNAME_PUBLIC}
@@ -191,7 +203,9 @@ List:
 - .deploy.env
 - Image tags used
 - Rollout history (kubectl -n endo-api rollout history deploy/endo-api)
+- Registry validation output (make validate-registry)
 ```
 
 ### Notes / Deviations
+```
 ```
