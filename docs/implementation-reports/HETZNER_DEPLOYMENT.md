@@ -58,6 +58,7 @@ git log -1 --oneline
 
 ### Phase 3: Version & Variables
 *To-Do*
+for more details see endoreg-db/config/settings/keycloak.py
 ```bash
 export KEYCLOAK_BASE_URL="https://keycloak.endo-reg.net"
 export KEYCLOAK_REALM="EndoregDb"
