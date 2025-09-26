@@ -33,6 +33,8 @@ Document any anomalies:
 
 ```
 
+
+
 #### Manual Diagnostics & Fixes:
 ```bash
 
@@ -55,6 +57,28 @@ git log -1 --oneline
 ```
 
 ### Phase 3: Version & Variables
+*To-Do*
+```bash
+export KEYCLOAK_BASE_URL="https://keycloak.endo-reg.net"
+export KEYCLOAK_REALM="EndoregDb"
+export OIDC_RP_CLIENT_ID="endoregdb-api"
+export OIDC_RP_CLIENT_SECRET="<copied secret>"
+export LOGIN_URL="/oidc/authenticate/"
+export LOGIN_REDIRECT_URL="/"
+export LOGOUT_REDIRECT_URL="/"
+export OIDC_OP_AUTHORIZATION_ENDPOINT="$KEYCLOAK_BASE_URL/realms/$KEYCLOAK_REALM/protocol/openid-connect/auth"
+export OIDC_OP_TOKEN_ENDPOINT="$KEYCLOAK_BASE_URL/realms/$KEYCLOAK_REALM/protocol/openid-connect/token"
+export OIDC_OP_USER_ENDPOINT="$KEYCLOAK_BASE_URL/realms/$KEYCLOAK_REALM/protocol/openid-connect/userinfo"
+export OIDC_OP_JWKS_ENDPOINT="$KEYCLOAK_BASE_URL/realms/$KEYCLOAK_REALM/protocol/openid-connect/certs"
+export OIDC_RP_SCOPES="openid email profile"
+export OIDC_RP_SIGN_ALGO="RS256"
+export OIDC_VERIFY_SSL=False              # dev only; True in prod
+export OIDC_OP_LOGOUT_ENDPOINT="$KEYCLOAK_BASE_URL/realms/$KEYCLOAK_REALM/protocol/openid-connect/logout"
+export OIDC_STORE_ID_TOKEN=True
+export OIDC_LOGOUT_REDIRECT_URL="/"
+export OIDC_AUTH_REQUEST_EXTRA_PARAMS='{"prompt":"login"}'   # testing (forces login page)
+```
+
 Choose a version tag (do not overwrite an existing pushed tag):
 ```bash
 export KUBECONFIG=/etc/rancher/rke2/rke2.yaml
