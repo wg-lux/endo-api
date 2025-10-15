@@ -239,10 +239,34 @@ cat status-summary.json | jq '.tests | to_entries[] | select(.value.result == "F
 - **Containers**: No credentials baked into images
 
 ### Environment Variables
-```bash
-# Secrets are read from environment at runtime
-DJANGO_SECRET_KEY=""             # Set via .env or environment
-```
+
+The `.env` template now mirrors the upstream endoreg-db requirements. Running `manage setup` (or `devenv task run env:build`) copies `.env.example`, fills in any missing keys, and appends generated secrets when absent.
+
+#### Core
+- `DJANGO_SETTINGS_MODULE` — Defaults to `config.settings.test`; switch to `config.settings.dev` for local development.
+- `TIME_ZONE` — Defaults to `Europe/Berlin`.
+- `DJANGO_SECRET_KEY`, `DJANGO_SALT` — Generated automatically if missing; supply explicit values in production.
+
+#### Paths
+- `STORAGE_DIR`, `ASSET_DIR`, `STATIC_URL`, `MEDIA_URL` — File-system and URL roots for media and assets.
+
+#### Feature Flags
+- `RUN_VIDEO_TESTS`, `SKIP_EXPENSIVE_TESTS` — Control long-running test execution.
+
+#### REST Framework Throttles
+- `DRF_THROTTLE_USER`, `DRF_THROTTLE_ANON` — Requests per hour caps.
+
+#### Development / Testing Databases (SQLite defaults)
+- `DEV_DB_ENGINE`, `DEV_DB_NAME`
+- `TEST_DB_ENGINE`, `TEST_DB_NAME`, `TEST_DISABLE_MIGRATIONS`
+
+#### Production Overrides (commented out by default)
+- Uncomment and populate secrets, hostnames, and Postgres credentials (`DB_ENGINE`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DJANGO_ALLOWED_HOSTS`, `SECURE_*`).
+
+#### Optional Integrations
+- `KEYCLOAK_*`, `TOKEN_VALIDATOR_PORT` — Enable token validation for `manage.py runserver` workflows.
+
+Legacy Luxnix variables such as `DJANGO_SETTINGS_MODULE_DEVELOPMENT`, `DJANGO_SETTINGS_MODULE_PRODUCTION`, and `DJANGO_SETTINGS_MODULE_CENTRAL` remain supported. Helper scripts now fall back to the new `config.settings.*` modules when overrides are absent.
 
 ### Best Practices
 - All secret files are in `.gitignore` (`.env`, `.secrets`, `conf/`)
@@ -305,6 +329,16 @@ manage docker-dev-build && manage docker-dev-run
 # Full production deployment
 manage prod && manage deploy
 ```
+
+### Release Environment Variables
+
+Both container images and Kubernetes manifests now consume the `.env.example` defaults introduced with the latest endoreg-db release:
+
+- Settings modules live under `config.settings.*` (dev/prod/central)
+- Shared defaults: `TIME_ZONE=Europe/Berlin`, `STORAGE_DIR=/app/data`, `STATIC_URL=/static/`, `MEDIA_URL=/media/`
+- Feature toggles: `RUN_VIDEO_TESTS=false`, `SKIP_EXPENSIVE_TESTS=true`
+- K8s ConfigMap (`endo-api-config`) mirrors these values; update via `make k8s-config HOST=<domain>`
+- Central deployment: set `CENTRAL_NODE=true` (containers automatically load `config.settings.central`)
 
 ### Production Containers
 ```bash

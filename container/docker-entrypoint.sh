@@ -6,13 +6,19 @@ echo "Env: ${DJANGO_ENV:-development}"
 echo "Host: ${DJANGO_HOST:-0.0.0.0}"  
 echo "Port: ${DJANGO_PORT:-8118}"
 
-export DJANGO_ENV="${DJANGO_ENV:-development}"
+if [ "${CENTRAL_NODE:-false}" = "true" ] && [ -z "${DJANGO_ENV:-}" ]; then
+  export DJANGO_ENV="central"
+else
+  export DJANGO_ENV="${DJANGO_ENV:-development}"
+fi
 
 # Select settings module
 if [ "$DJANGO_ENV" = "production" ]; then
-  export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-endo_api.settings_prod}"
+  export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.prod}"
+elif [ "$DJANGO_ENV" = "central" ]; then
+  export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.central}"
 else
-  export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-endo_api.settings_dev}"
+  export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.dev}"
 fi
 export DJANGO_MODULE="${DJANGO_MODULE:-endo_api}"
 

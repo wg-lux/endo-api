@@ -101,21 +101,19 @@ docker run --rm -p 8118:8118 \
 
 ## Environment Variables
 
-### Common Variables
-- `DJANGO_HOST` - Host binding (default: 0.0.0.0)
-- `DJANGO_PORT` - Port (default: 8118)
-- `ENDO_API_MODE` - Mode: development/production
-- `DJANGO_SECRET_KEY` - Django secret key (required for production)
-- `DJANGO_DEBUG` - Debug mode (default: True for dev, False for prod)
+Both containers now mirror the `.env.example` template used by the core application. Key defaults:
 
-### Development Specific
-- `DJANGO_ALLOWED_HOSTS` - Allowed hosts (default: *)
-- `DATABASE_ENGINE` - Database engine (default: sqlite)
+- `DJANGO_SETTINGS_MODULE` – defaults to `config.settings.dev` (dev) or `config.settings.prod` (prod)
+- `DJANGO_ENV` – `development`, `production`, or `central`
+- `TIME_ZONE` – default `Europe/Berlin`
+- `STORAGE_DIR` / `DATA_DIR` – default `/app/data`
+- `STATIC_URL` / `MEDIA_URL` – default `/static/` and `/media/`
 
-### Production Specific
-- Provide database configuration via `DATABASE_URL` or DB_* environment variables (DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT)
-- `DJANGO_ALLOWED_HOSTS` - Comma-separated allowed hosts
-- Security settings automatically configured
+Additional notes:
+
+- `CENTRAL_NODE=true` automatically selects `config.settings.central`
+- Production entrypoint enforces `DJANGO_DEBUG=false` and requires `DJANGO_SECRET_KEY`
+- Database configuration via `DATABASE_URL` or `DB_*` variables (same precedence as `.env`)
 
 ## Volume Mounts
 

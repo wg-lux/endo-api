@@ -96,9 +96,18 @@ k8s-config: k8s-namespace
 	@echo "Applying ConfigMap endo-api-config in $(NAMESPACE)"
 	kubectl -n $(NAMESPACE) create configmap endo-api-config \
 	  --from-literal=DJANGO_ENV=production \
-	  --from-literal=DJANGO_DEBUG=false \
+	  --from-literal=DJANGO_SETTINGS_MODULE="config.settings.prod" \
 	  --from-literal=DJANGO_ALLOWED_HOSTS="$(HOST),localhost,127.0.0.1,endo-api,endo-api.endo-api.svc,endo-api.endo-api.svc.cluster.local" \
-	  --from-literal=DJANGO_SETTINGS_MODULE="endo_api.settings_prod" \
+	  --from-literal=DJANGO_DEBUG=false \
+	  --from-literal=DJANGO_HOST=0.0.0.0 \
+	  --from-literal=DJANGO_PORT=8118 \
+	  --from-literal=TIME_ZONE=Europe/Berlin \
+	  --from-literal=STATIC_URL=/static/ \
+	  --from-literal=MEDIA_URL=/media/ \
+	  --from-literal=RUN_VIDEO_TESTS=false \
+	  --from-literal=SKIP_EXPENSIVE_TESTS=true \
+	  --from-literal=STORAGE_DIR=/app/data \
+	  --from-literal=ASSET_DIR=tests/assets \
 	  --from-literal=DJANGO_CSRF_TRUSTED_ORIGINS="$(CSRF_ORIGINS)" \
 	  --from-literal=DJANGO_SECURE_SSL_REDIRECT="true" \
 	  --from-literal=DJANGO_SESSION_COOKIE_SECURE="true" \

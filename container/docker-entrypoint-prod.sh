@@ -7,8 +7,13 @@ echo "Host: ${DJANGO_HOST:-0.0.0.0}"
 echo "Port: ${DJANGO_PORT:-8118}"
 
 # Set production Django configuration
-export DJANGO_ENV="${DJANGO_ENV:-production}"
-export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-endo_api.settings_prod}"
+if [ "${CENTRAL_NODE:-false}" = "true" ]; then
+  export DJANGO_ENV="${DJANGO_ENV:-central}"
+  export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.central}"
+else
+  export DJANGO_ENV="${DJANGO_ENV:-production}"
+  export DJANGO_SETTINGS_MODULE="${DJANGO_SETTINGS_MODULE:-config.settings.prod}"
+fi
 export DJANGO_MODULE="${DJANGO_MODULE:-endo_api}"
 
 # Production environment variables

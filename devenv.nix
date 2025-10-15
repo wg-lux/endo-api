@@ -136,16 +136,6 @@ in
     echo "Env: $MODE_MSG"
     echo "============================================="
     
-    # Initialize and update submodules (non-remote by default for reproducible builds)
-    git submodule init
-    if [ "''${GIT_SUBMODULE_REMOTE:-false}" = "true" ]; then
-      echo "🔄 Updating submodules with remote refs (GIT_SUBMODULE_REMOTE=true)..."
-      git submodule update --remote --recursive
-    else
-      echo "📌 Updating submodules to pinned refs (set GIT_SUBMODULE_REMOTE=true for remote updates)..."
-      git submodule update --recursive
-    fi
-
     export SYNC_CMD="uv sync"
 
     if [ ! -d ".devenv/state/venv" ]; then

@@ -31,12 +31,15 @@ RUN uv sync --frozen --no-dev && \
 # Copy application code
 COPY . /app
 
-# Environment defaults
+# Runtime environment defaults
 ENV PATH="/app/.venv/bin:$PATH" \
+    DJANGO_SETTINGS_MODULE=config.settings.prod \
     DJANGO_HOST=0.0.0.0 \
     DJANGO_PORT=8118 \
     DJANGO_ENV=production \
-    DJANGO_MODULE=endo_api
+    DJANGO_MODULE=endo_api \
+    STORAGE_DIR=/app/data \
+    DATA_DIR=/app/data
 
 EXPOSE 8118
 
