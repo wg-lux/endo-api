@@ -43,6 +43,26 @@ def _ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _ensure_quoted_value(lines: list[str], key: str) -> None:
+    """Ensure the given key has a double-quoted value in the .env lines."""
+
+    prefix = f"{key}="
+    for index, raw_line in enumerate(lines):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not stripped.startswith(prefix):
+            continue
+
+        value = stripped[len(prefix) :].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            return
+
+        unquoted = value.strip('"').strip("'")
+        lines[index] = f'{key}="{unquoted}"'
+        return
+
+
 # --- Resolve key paths ---
 conf_dir = _resolve_env_path("CONF_DIR", Path("./conf"))
 conf_dir.mkdir(parents=True, exist_ok=True)
@@ -133,9 +153,12 @@ if "DJANGO_SALT" not in existing_keys:
     salt = get_random_secret_key()
     if existing_lines and existing_lines[-1].strip():
         existing_lines.append("")
-    existing_lines.append(f"DJANGO_SALT={salt}")
+    existing_lines.append(f'DJANGO_SALT="{salt}"')
     existing_keys.add("DJANGO_SALT")
     print("Generated DJANGO_SALT and appended to .env.")
+
+_ensure_quoted_value(existing_lines, "DJANGO_SECRET_KEY")
+_ensure_quoted_value(existing_lines, "DJANGO_SALT")
 
 
 # --- Write updated .env ---
