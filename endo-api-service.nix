@@ -398,7 +398,7 @@ with lib.luxnix; let
     echo "Protocol: ${envHttpProtocol}"
     
     # Start the Django application
-    exec devenv shell -- run-prod-server
+    exec devenv shell -- run-server
   '';
 
 in
