@@ -204,9 +204,13 @@ with lib.luxnix; let
 
     echo "Initializing submodules..."
     git submodule init || { echo "ERROR: Failed to initialize submodules"; exit 1; }
-    git submodule update --remote --recursive || { echo "ERROR: Failed to update submodules"; exit 1; }
-    git submodule init
-    git submodule update --remote --recursive
+    if ${if cfg.repository.updateOnBoot then "true" else "false"}; then
+      echo "Updating submodules from remote..."
+      git submodule update --init --remote --recursive || { echo "ERROR: Failed to update submodules from remote"; exit 1; }
+    else
+      echo "Updating submodules (no remote fetch)..."
+      git submodule update --init --recursive || { echo "ERROR: Failed to update submodules"; exit 1; }
+    fi
 
     # Copy database password from vault (managed by postgres-default role)
     echo "Setting up database configuration..."
@@ -261,30 +265,39 @@ with lib.luxnix; let
       cd ${repoDir}
       
       # Set environment variables needed by the Django config scripts
-  export DATA_DIR="${envDataDir}"
-  export STORAGE_DIR="${envStorageDir}"
-  export CONF_DIR="${envConfDir}"
-  export CONF_TEMPLATE_DIR="${envConfTemplateDir}"
-  export WORKING_DIR="${repoDir}"
-  export HOME_DIR="${endoreg-service-user-home}"
-  export DB_PWD_FILE="${envConfDir}/db_pwd"
-  export DJANGO_MODULE="${envDjangoModule}"
-  export DJANGO_SETTINGS_MODULE="${envDjangoSettingsModule}"
-  export DJANGO_SETTINGS_MODULE_PRODUCTION="config.settings.prod"
-  export DJANGO_SETTINGS_MODULE_DEVELOPMENT="config.settings.dev"
-  export DJANGO_SETTINGS_MODULE_CENTRAL="config.settings.central"
-  export DJANGO_ENV="${envDjangoEnv}"
-  export CENTRAL_NODE="${envCentralNodeFlag}"
-  export HTTP_PROTOCOL="${envHttpProtocol}"
-  export DJANGO_HOST="${envDjangoHost}"
-  export DJANGO_PORT="${envDjangoPort}"
-  export BASE_URL="${envBaseUrl}"
-  export TIME_ZONE="${cfg.api.timeZone}"
-  export STATIC_URL="${envStaticUrl}"
-  export MEDIA_URL="${envMediaUrl}"
-  export ASSET_DIR="${envAssetDir}"
-  export RUN_VIDEO_TESTS="${envRunVideoTests}"
-  export SKIP_EXPENSIVE_TESTS="${envSkipExpensiveTests}"
+      export DATA_DIR="${envDataDir}"
+      export STORAGE_DIR="${envStorageDir}"
+      export CONF_DIR="${envConfDir}"
+      export CONF_TEMPLATE_DIR="${envConfTemplateDir}"
+      export WORKING_DIR="${repoDir}"
+      export HOME_DIR="${endoreg-service-user-home}"
+      export DB_PWD_FILE="${envConfDir}/db_pwd"
+      export DJANGO_MODULE="${envDjangoModule}"
+      export DJANGO_SETTINGS_MODULE="${envDjangoSettingsModule}"
+      export DJANGO_SETTINGS_MODULE_PRODUCTION="config.settings.prod"
+      export DJANGO_SETTINGS_MODULE_DEVELOPMENT="config.settings.dev"
+      export DJANGO_SETTINGS_MODULE_CENTRAL="config.settings.central"
+      export DJANGO_ENV="${envDjangoEnv}"
+      export CENTRAL_NODE="${envCentralNodeFlag}"
+      export HTTP_PROTOCOL="${envHttpProtocol}"
+      export DJANGO_HOST="${envDjangoHost}"
+      export DJANGO_PORT="${envDjangoPort}"
+      export BASE_URL="${envBaseUrl}"
+      export TIME_ZONE="${cfg.api.timeZone}"
+      export STATIC_URL="${envStaticUrl}"
+      export MEDIA_URL="${envMediaUrl}"
+      export ASSET_DIR="${envAssetDir}"
+      export RUN_VIDEO_TESTS="${envRunVideoTests}"
+      export SKIP_EXPENSIVE_TESTS="${envSkipExpensiveTests}"
+
+      DB_PASSWORD_VALUE="$(tr -d '\n' < ${envConfDir}/db_pwd 2>/dev/null || true)"
+      export DB_ENGINE="django.db.backends.postgresql"
+      export DB_NAME="${cfg.database.name}"
+      export DB_USER="${cfg.database.user}"
+      export DB_PASSWORD="$DB_PASSWORD_VALUE"
+      export DB_HOST="${cfg.database.host}"
+      export DB_PORT="${toString cfg.database.port}"
+      export DB_SSLMODE="${cfg.database.sslMode}"
       
       # Ensure devenv is available and run the configuration script
       if command -v devenv >/dev/null 2>&1; then
@@ -327,6 +340,53 @@ with lib.luxnix; let
         echo "WARNING: Django configuration file ${envConfDir}/db.yaml was not created"
         echo "Contents of conf directory:"
         ls -la "${envConfDir}/" 2>/dev/null || echo "Cannot access conf directory"
+      fi
+
+      # Force production mode indicators for the devenv shell helpers
+      echo "Setting deployment mode markers..."
+      echo "${envDjangoEnv}" > .mode
+      chmod 600 .mode 2>/dev/null || true
+
+      if [ -f .env ]; then
+        echo "Aligning .env with production settings module"
+        export DESIRED_SETTINGS_MODULE="${envDjangoSettingsModule}"
+        export DESIRED_ENVIRONMENT="${envDjangoEnv}"
+        python - <<'PY'
+import os
+from pathlib import Path
+
+env_path = Path('.env')
+desired_module = os.environ['DESIRED_SETTINGS_MODULE']
+desired_env = os.environ['DESIRED_ENVIRONMENT']
+
+if not env_path.exists():
+    raise SystemExit(0)
+
+lines = env_path.read_text(encoding='utf-8').splitlines()
+updated = []
+have_module = False
+have_env = False
+
+for line in lines:
+    if line.startswith('DJANGO_SETTINGS_MODULE='):
+        updated.append(f'DJANGO_SETTINGS_MODULE={desired_module}')
+        have_module = True
+    elif line.startswith('DJANGO_ENV='):
+        updated.append(f'DJANGO_ENV={desired_env}')
+        have_env = True
+    else:
+        updated.append(line)
+
+if not have_module:
+    updated.append(f'DJANGO_SETTINGS_MODULE={desired_module}')
+
+if not have_env:
+    updated.append(f'DJANGO_ENV={desired_env}')
+
+env_path.write_text('\n'.join(updated) + '\n', encoding='utf-8')
+PY
+      else
+        echo "WARNING: .env not found after setup; production overrides skipped"
       fi
       
     else
