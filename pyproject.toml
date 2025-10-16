@@ -1,6 +1,6 @@
 [project]
 name = "endo-api"
-version = "1.0.1"
+version = "1.0.2"
 description = "EndoReg Db API Service"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -30,7 +30,7 @@ dependencies = [
     "daphne>=4.2.1",
     "django-cors-headers>=4.7.0",
     "django-extensions>=4.1",
-    "endoreg-db>=0.8.1",
+    "endoreg-db>=0.8.2",
     "mypy>=1.17.1",
     "nvidia-ml-py>=13.580.65",
     "psycopg[binary]>=3.2.9",
