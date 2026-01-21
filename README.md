@@ -1,372 +1,583 @@
-# endo-api
-Basic Django Project using EndoReg-DB
+# Endo API
+**Modern Django Endoscopy API with Unified DevEnv Management**
 
-## Environment Setup
+A sophisticated Django application for endoscopy data processing and management, built with modern DevOps practices, unified container management, and streamlined development/production workflows.
 
-### Development Environment (Local)
-
-For local development, the application uses `.env` files for configuration:
-
-1. **Initialize the environment**:
-   ```bash
-   # Enter the devenv shell
-   devenv shell
-   
-   # Test luxnix compatibility
-   test-luxnix-compatibility
-   
-   # Initialize configuration
-   devenv task run env:init-conf
-   devenv task run env:build
-   ```
-
-2. **Run the development server**:
-   ```bash
-   run-dev-server
-   # or manually:
-   python manage.py runserver localhost:8118
-   ```
-
-### Production Environment (Luxnix Managed)
-
-When deployed on luxnix-managed machines, configuration is automatic:
-
-- **No manual setup required** - luxnix provides `local_settings.py`
-- **Database credentials** are loaded from the luxnix vault system
-- **Security settings** are managed by the deployment system
-- **Environment detection** is automatic
-
-## Luxnix Compatibility
-
-This application is designed to work seamlessly with managed machines running on custom NixOS configurations via the luxnix project. The application automatically detects luxnix environments and adapts its configuration accordingly.
-
-### Key Features for Luxnix Integration:
-
-- **Automatic Environment Detection**: Detects when running in a luxnix managed environment by checking for `local_settings.py`
-- **Central Node Support**: Automatically configures for central nodes when `CENTRAL_NODE=true` environment variable is set
-- **Settings Override**: Imports `local_settings.py` when available, allowing luxnix to override default configurations
-- **Flexible Configuration**: All hardcoded values can be overridden via environment variables
-
-### Central Node Configuration
-
-When `CENTRAL_NODE=true` is set, the application operates as a central coordination node with additional capabilities:
-
-#### **Central Node Implications:**
-
-1. **Database Access**: Central nodes typically have access to the `endoregDbCentral` database instead of local databases
-2. **Network Topology**: Central nodes are configured to communicate with local nodes across the network
-3. **CORS Settings**: Automatically configured to allow cross-origin requests from local nodes
-4. **Additional Endpoints**: May have access to coordination and management endpoints not available on local nodes
-5. **Settings Module**: Uses `endo_api.settings_central` instead of `endo_api.settings_prod`
-
-#### **Central Node Responsibilities:**
-
-- **Data Aggregation**: Collects and processes data from local nodes
-- **Coordination**: Manages distributed operations across the network
-- **Authentication**: May serve as authentication provider for local nodes
-- **Backup/Sync**: Handles data synchronization and backup operations
-
-#### **Environment Variables for Central Nodes:**
-
-```bash
-CENTRAL_NODE=true
-DJANGO_SETTINGS_MODULE=endo_api.settings_central
-IS_CENTRAL_NODE=true
-CENTRAL_NODES=["s-04"]  # List of central node identifiers
-LOCAL_NODES=["gs-01", "gs-02", "gc-05", "gc-06", "gc-10"]  # Managed local nodes
-```
-
-### Environment Variables Reference:
-
-The application respects the following environment variables for luxnix compatibility:
-
-#### **Core Configuration:**
-- `CENTRAL_NODE`: Set to "true" for central node configuration
-- `DJANGO_HOST`: Server host (default: localhost)
-- `DJANGO_PORT`: Server port (default: 8118)  
-- `DJANGO_DEBUG`: Enable/disable debug mode
-- `DJANGO_SECRET_KEY`: Django secret key (auto-generated if not provided)
-- `DJANGO_ALLOWED_HOSTS`: Comma-separated list of allowed hosts
-
-#### **Directory Configuration:**
-- `DATA_DIR` / `STORAGE_DIR`: Data storage directory
-- `CONF_DIR`: Configuration directory
-- `CONF_TEMPLATE_DIR`: Template configuration directory
-- `WORKING_DIR`: Application working directory
-
-#### **Database Configuration:**
-- `DB_CONFIG_FILE`: Database configuration file path
-- `DB_PWD_FILE`: Database password file path
-
-#### **Django Settings Modules:**
-- `DJANGO_SETTINGS_MODULE_DEVELOPMENT`: Development settings module
-- `DJANGO_SETTINGS_MODULE_PRODUCTION`: Production settings module  
-- `DJANGO_SETTINGS_MODULE_CENTRAL`: Central node settings module
-
-#### **Advanced Configuration:**
-- `BASE_URL`: Full base URL for the application
-- `HTTP_PROTOCOL`: Protocol (http/https)
-- `LX_MAINTENANCE_PASSWORD_FILE`: Maintenance password file path
-
-### Development vs Production vs Central Node:
-
-| Feature | Development | Production | Central Node |
-|---------|-------------|------------|--------------|
-| Settings Module | `settings_dev` | `settings_prod` | `settings_central` |
-| Configuration Source | `.env` file | `local_settings.py` | `local_settings.py` |
-| Database | SQLite (dev) | PostgreSQL | PostgreSQL (Central DB) |
-| Debug Mode | Enabled | Disabled | Disabled |
-| CORS | Permissive | Restricted | Cross-node enabled |
-| Network Access | Local only | Node-specific | Multi-node |
-| Secret Management | Local/Manual | Luxnix Vault | Luxnix Vault |
-
-### Luxnix Deployment Process:
-
-When deployed via luxnix, the following happens automatically:
-
-1. **Configuration Generation**: `local_settings.py` is created with environment-specific settings
-2. **Database Setup**: PostgreSQL credentials are loaded from the luxnix vault system
-3. **Security Configuration**: SSL certificates, CORS settings, and security headers are configured
-4. **Service Management**: Systemd service `endo-api-boot.service` manages the application lifecycle
-5. **Environment Detection**: Application automatically detects luxnix environment and skips local config generation
-
-#### **Available Scripts and Commands:**
-
-```bash
-# Development
-run-dev-server          # Start development server
-set-dev-settings        # Configure development settings
-
-# Production  
-run-prod-server         # Start production server (auto-detects central node)
-set-prod-settings       # Configure production settings
-set-central-settings    # Configure central node settings
-
-# Environment Management
-env-pipe               # Full environment setup pipeline
-env-init-conf          # Initialize configuration files
-env-build              # Build .env file from templates
-env-export             # Export environment variables
-
-# Database Management
-ensure-psql            # Ensure PostgreSQL is configured
-deploy-migrate         # Run database migrations
-deploy-load-base-db-data  # Load initial database data
-deploy-collectstatic   # Collect static files
-
-# Testing and Diagnostics
-test-luxnix-compatibility  # Test luxnix integration
-gpu-check             # Check GPU availability
-```
-
-## Troubleshooting
-
-### Common Issues:
-
-1. **Environment Variables Not Loading**:
-   ```bash
-   # Check .env file syntax
-   cat .env
-   # Reload environment
-   direnv reload
-   ```
-
-2. **Database Connection Issues**:
-   ```bash
-   # Verify database configuration
-   python manage.py check
-   # Run PostgreSQL setup
-   ensure-psql
-   ```
-
-3. **Luxnix Integration Problems**:
-   ```bash
-   # Test compatibility
-   test-luxnix-compatibility
-   # Check if local_settings.py exists
-   ls -la local_settings.py
-   ```
-
-4. **Service Issues (Luxnix Deployment)**:
-   ```bash
-   # Check service logs
-   sudo journalctl -u endo-api-boot.service -f
-   # Restart service
-   sudo systemctl restart endo-api-boot.service
-   ```
-
-
-## Development Setup
+## 🚀 Quick Start
 
 ### Prerequisites
-- NixOS with devenv installed
-- Git with submodule support
-- Access to luxnix repository (for managed deployments)
+- **Nix** with flakes support
+- **direnv** for automatic environment loading
+- **Docker or Podman** for containers
 
-### Quick Start
-
-1. **Clone and Initialize**:
-   ```bash
-   git clone <repository-url>
-   cd endo-api
-   git submodule init
-   git submodule update --remote --recursive
-   ```
-
-2. **Enter Development Environment**:
-   ```bash
-   # This will automatically:
-   # - Set up Python environment with uv
-   # - Install dependencies
-   # - Configure environment variables
-   devenv shell
-   ```
-
-3. **Initialize Configuration**:
-   ```bash
-   # Create configuration files and .env
-   devenv task run env:init-conf
-   devenv task run env:build
-   ```
-
-4. **Run Database Setup**:
-   ```bash
-   # Migrate database
-   python manage.py migrate
-   # Load initial data
-   python manage.py load_base_db_data
-   # Collect static files
-   python manage.py collectstatic --noinput
-   ```
-
-5. **Start Development Server**:
-   ```bash
-   run-dev-server
-   # Server will be available at http://localhost:8118
-   ```
-
-### Submodules
-
-The application includes git submodules for required libraries:
-- `libs/endoreg-db`: Core database models and utilities  
-- `libs/lx-anonymizer`: Video anonymization tools
-
-To initialize submodules manually:
+### 1. Initialize Environment
 ```bash
-git submodule init
-git submodule update --remote --recursive
+git clone <repository-url>
+cd endo-api
+direnv allow                    # Enable automatic environment loading
+manage setup                   # Complete environment setup (see Setup section below)
 ```
 
-**Note**: The devenv shell automatically handles submodule initialization.
+### 2. Development Workflow
+```bash
+manage dev                     # Switch to development mode
+devenv up                      # Start Django server
+# Server accessible at http://localhost:8118
+```
 
-## Advanced Configuration
+### 3. Production Workflow
+```bash
+manage prod                    # Switch to production mode
+manage deploy                  # Complete deployment pipeline
+# Or use containers:
+manage docker-prod-build && manage docker-prod-run
+```
+#### Optional
+- If manage **docker-prod-run** shows an error about missing database environment variables, set them in your terminal first, then rerun the command.
+  ```
+  eval "$(python -c "import shlex; from pathlib import Path as P; from urllib.parse import quote_plus; import yaml; c=yaml.safe_load(P('conf/db.yaml').read_text()) if P('conf/db.yaml').exists() else {}; eng=c.get('engine','django.db.backends.postgresql'); host=c.get('host','localhost'); name=c.get('name',''); user=c.get('user',''); port=str(c.get('port','5432')); pwd=c.get('password',''); pf=c.get('password_file'); pwd=P(pf).read_text().strip() if pf and P(pf).is_file() else pwd; auth=quote_plus(user) if user else ''; auth=auth+(':'+quote_plus(pwd) if pwd else ''); at='@' if auth else ''; net=f'{host}:{port}' if port else host; url=f'postgresql://{auth}{at}{net}/{name}'; print(f'export DATABASE_URL={shlex.quote(url)}'); print(f'export DB_ENGINE={shlex.quote(eng)}'); print(f'export DB_NAME={shlex.quote(name)}'); print(f'export DB_USER={shlex.quote(user)}'); print(f'export DB_PASSWORD={shlex.quote(pwd)}'); print(f'export DB_HOST={shlex.quote(host)}'); print(f'export DB_PORT={shlex.quote(port)}')")"
+  ```
+- Quick check
+  ```
+  echo "$DATABASE_URL"
+  env | grep -E '^DB_(ENGINE|NAME|USER|PASSWORD|HOST|PORT)='
 
-### Debug Nix Variables
-```nix-repl
-# Nix Vars
-varsNix = import ./devenv/vars.nix
-varsNix {
-  dataDir = "data";
-  confDir = "./conf";
-  djangoModuleName = "endo_api";
-  host = "localhost";
-  port = "8118";
+  ```
+
+## 🎯 Key Features
+
+### ✅ **Unified Management System**
+- **Single Command Interface**: `manage` command for all operations
+- **Mode-Aware Operations**: Automatically adapts to development/production
+- **Zero Configuration Drift**: Centralized settings via `app_config.nix`
+
+### ✅ **Modern DevEnv Integration**
+- **DevEnv shell for local development**: Reproducible environment via Nix
+- **Automatic Environment**: Shell loads with all dependencies ready
+- **CUDA Support**: GPU acceleration for ML workloads
+
+### ✅ **Streamlined Development**
+- **Development**: SQLite + Django dev server
+- **Production**: PostgreSQL + Daphne ASGI server
+- **Containers**: Standard Docker/Podman images with env-first overrides
+
+### ✅ **Enterprise Ready**
+- **Luxnix Compatibility**: Automatic coordination node configuration
+- **Comprehensive Validation**: System health monitoring with JSON reports
+- **Professional Organization**: Clean architecture with full documentation
+
+## � Environment Setup
+
+The `manage setup` command performs initial environment configuration and should be run:
+- **First time** after cloning the repository
+- **After configuration changes** (templates, environment variables)
+- **When troubleshooting** environment-related issues
+
+### What Setup Does
+
+#### 1. **Directory Structure Creation**
+```bash
+# Creates essential directories
+data/                          # Application data storage
+├── import/                    # Data import staging
+├── export/                    # Data export staging  
+├── videos/                    # Video file storage
+├── frames/                    # Extracted frame storage
+├── pdfs/                      # PDF document storage
+├── model_weights/             # ML model storage
+└── logs/                      # Application logs
+
+conf/                          # Configuration files
+staticfiles/                   # Static assets for production
+```
+
+#### 2. **Configuration Files**
+- **`conf/db.yaml`**: Database configuration from template
+- **`conf/db_pwd`**: Database password file (⚠️ **secure permissions 0o600**)
+- **`.env`**: Environment variables with generated secrets
+
+#### 3. **Security Setup**
+- **Secret key generation**: Creates `DJANGO_SECRET_KEY` and `DJANGO_SALT`
+- **Password files**: Creates database password with restrictive permissions
+- **Environment isolation**: Configures development vs production settings
+
+#### 4. **CUDA Environment** (Optional)
+- Tests CUDA availability for GPU acceleration
+- Configures PyTorch GPU support
+- Non-blocking (continues if CUDA unavailable)
+
+### Security Considerations
+
+⚠️ **IMPORTANT**: Setup creates default passwords that **MUST** be changed for production:
+
+```bash
+# Default database password is "changeme_in_production"
+# Change it immediately:
+echo "your_secure_password" > conf/db_pwd
+chmod 600 conf/db_pwd
+```
+
+### Setup Usage
+
+```bash
+# Basic setup (recommended for first time)
+manage setup
+
+# Re-run setup (preserves existing secrets)
+manage setup
+
+# Check what setup would do (without changes)
+python scripts/core/setup.py --status-only
+
+# Force regeneration of all files (overwrites existing)
+python scripts/core/setup.py --force
+```
+
+### Troubleshooting Setup
+
+**Missing environment variables**:
+```bash
+# Ensure you're in a devenv shell
+devenv shell
+# Then retry setup
+manage setup
+```
+
+**Permission errors**:
+```bash
+# Ensure directories are writable
+chmod 755 conf/ data/
+# Retry setup
+manage setup
+```
+
+**Template files missing**:
+```bash
+# Check template directory exists
+ls conf_template/
+# Should contain: db.yaml, default.env
+```
+
+## �📋 Management Commands
+
+### Core Commands
+```bash
+manage help                    # Show all available commands
+manage status                  # Show current configuration (mode, host, port)
+manage setup                   # Complete environment setup (directories, config, secrets)
+```
+
+### Environment Management
+```bash
+manage dev                     # Switch to development mode (SQLite)
+manage prod                    # Switch to production mode (PostgreSQL)
+```
+
+### Container Operations (Docker/Podman)
+```bash
+manage docker-dev-build        # Build development image
+manage docker-dev-run          # Run development container
+manage docker-prod-build       # Build production image
+manage docker-prod-run         # Run production container
+manage docker-logs [dev|prod]  # Tail container logs
+manage docker-stop             # Stop containers (dev and prod)
+manage docker-clean            # Remove images and containers
+```
+
+### Deployment
+```bash
+manage deploy                  # Full deployment pipeline (production)
+```
+
+### System Validation
+```bash
+# Run comprehensive system validation (may build/run containers)
+bash scripts/core/system-validation.sh
+
+# Generate JSON status report only (recommended for CI)
+bash scripts/core/system-validation.sh --json-only
+
+# Fast/local validation (skip slow container builds and runs)
+bash scripts/core/system-validation.sh --skip-containers
+
+# View detailed system status
+cat status-summary.json | jq '.summary'
+```
+
+> Note: The full validation may create Docker images and run containers which modify local state. For idempotent checks use `--skip-containers` or `--json-only` in CI.
+
+## 🔍 System Validation
+
+The application includes comprehensive system validation with JSON reporting:
+
+### Validation Features
+- **File Structure**: Validates all required files and directories
+- **Environment**: Tests unified environment management
+- **Database**: Validates connectivity and configuration
+- **CUDA/GPU**: Hardware compatibility testing
+- **Containers**: Build and run checks for dev/prod Docker/Podman images
+
+### Usage Examples
+```bash
+# Full system validation
+bash scripts/core/system-validation.sh
+
+# JSON-only output for automation
+bash scripts/core/system-validation.sh --json-only
+
+# Parse validation results
+cat status-summary.json | jq '.tests | to_entries[] | select(.value.result == "FAIL")'
+```
+
+## 🔐 Secret Management
+
+**Security-First Approach**: Secrets are never baked into the Nix store or committed to version control.
+
+### Database Passwords
+- **Development**: SQLite requires no password
+- **Production**: Provide via environment variables
+- **Containers**: No credentials baked into images
+
+### Environment Variables
+
+The `.env` template now mirrors the upstream endoreg-db requirements. Running `manage setup` (or `devenv task run env:build`) copies `.env.example`, fills in any missing keys, and appends generated secrets when absent.
+
+#### Core
+- `DJANGO_SETTINGS_MODULE` — Defaults to `config.settings.test`; switch to `config.settings.dev` for local development.
+- `TIME_ZONE` — Defaults to `Europe/Berlin`.
+- `DJANGO_SECRET_KEY`, `DJANGO_SALT` — Generated automatically if missing; supply explicit values in production.
+
+#### Paths
+- `STORAGE_DIR`, `ASSET_DIR`, `STATIC_URL`, `MEDIA_URL` — File-system and URL roots for media and assets.
+
+#### Feature Flags
+- `RUN_VIDEO_TESTS`, `SKIP_EXPENSIVE_TESTS` — Control long-running test execution.
+
+#### REST Framework Throttles
+- `DRF_THROTTLE_USER`, `DRF_THROTTLE_ANON` — Requests per hour caps.
+
+#### Development / Testing Databases (SQLite defaults)
+- `DEV_DB_ENGINE`, `DEV_DB_NAME`
+- `TEST_DB_ENGINE`, `TEST_DB_NAME`, `TEST_DISABLE_MIGRATIONS`
+
+#### Production Overrides (commented out by default)
+- Uncomment and populate secrets, hostnames, and Postgres credentials (`DB_ENGINE`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DJANGO_ALLOWED_HOSTS`, `SECURE_*`).
+
+#### Optional Integrations
+- `KEYCLOAK_*`, `TOKEN_VALIDATOR_PORT` — Enable token validation for `manage.py runserver` workflows.
+
+Legacy Luxnix variables such as `DJANGO_SETTINGS_MODULE_DEVELOPMENT`, `DJANGO_SETTINGS_MODULE_PRODUCTION`, and `DJANGO_SETTINGS_MODULE_CENTRAL` remain supported. Helper scripts now fall back to the new `config.settings.*` modules when overrides are absent.
+
+### Best Practices
+- All secret files are in `.gitignore` (`.env`, `.secrets`, `conf/`)
+- Use `manage setup` to generate defaults (see Environment Setup section)
+- Override defaults with environment variables in production
+- Never hardcode secrets in `app_config.nix` or other Nix files
+
+### Files Excluded from Version Control
+```
+.env*                 # Environment files
+.secrets              # Secret files  
+*.secret              # Any secret files
+conf/                 # Configuration directory (contains db_pwd)
+```
+
+## 🔐 Production configuration (env-first)
+
+- Required: `DJANGO_SECRET_KEY`
+- Database priority:
+  1) `DATABASE_URL` (e.g. `postgresql://user:pass@host:5432/db`)
+  2) `DB_ENGINE`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`
+- Optional security flags: `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_SECURE_SSL_REDIRECT`, `DJANGO_SESSION_COOKIE_SECURE`, `DJANGO_CSRF_COOKIE_SECURE`
+- Optional DB SSL via env:
+  - `DJANGO_DB_OPTIONS` (JSON) takes precedence
+  - Or `DB_SSLMODE`, `DB_SSLROOTCERT`/`DB_SSLROOTCERT_B64`, `DB_SSLCERT`/`DB_SSLCERT_B64`, `DB_SSLKEY`/`DB_SSLKEY_B64`
+
+Kubernetes example (Secrets/ConfigMaps)
+```yaml
+env:
+  - name: DJANGO_ENV
+    value: "production"
+  - name: DJANGO_SECRET_KEY
+    valueFrom:
+      secretKeyRef: { name: endo-api, key: django-secret-key }
+  - name: DATABASE_URL
+    valueFrom:
+      secretKeyRef: { name: endo-api-db, key: url }
+  - name: DJANGO_ALLOWED_HOSTS
+    value: "api.example.com"
+  - name: DJANGO_DEBUG
+    value: "false"
+```
+
+## 🧭 Common Workflows
+
+### Quick Development Setup
+```bash
+# Complete setup in one command (creates configs, secrets, directories)
+manage dev && manage setup && devenv up
+```
+
+### Container Development
+```bash
+# Build and run development container
+manage docker-dev-build && manage docker-dev-run
+```
+
+### Production Deployment
+```bash
+# Full production deployment
+manage prod && manage deploy
+```
+
+### Release Environment Variables
+
+Both container images and Kubernetes manifests now consume the `.env.example` defaults introduced with the latest endoreg-db release:
+
+- Settings modules live under `config.settings.*` (dev/prod/central)
+- Shared defaults: `TIME_ZONE=Europe/Berlin`, `STORAGE_DIR=/app/data`, `STATIC_URL=/static/`, `MEDIA_URL=/media/`
+- Feature toggles: `RUN_VIDEO_TESTS=false`, `SKIP_EXPENSIVE_TESTS=true`
+- K8s ConfigMap (`endo-api-config`) mirrors these values; update via `make k8s-config HOST=<domain>`
+- Central deployment: set `CENTRAL_NODE=true` (containers automatically load `config.settings.central`)
+
+### Production Containers
+```bash
+# Build and run production containers
+manage prod && manage docker-prod-build && manage docker-prod-run
+```
+
+### System Health Check
+```bash
+# Validate system and generate report
+bash scripts/core/system-validation.sh
+cat status-summary.json | jq '.summary'
+```
+
+## 🔧 DevEnv Commands
+
+### Core DevEnv Integration
+```bash
+# Start services based on current mode
+start-services                 # Mode-aware service startup
+services-up                    # Service management
+services-down                  # Stop all services
+services-logs                  # Follow service logs
+
+# Database operations
+db-shell                       # Connect to database (mode-aware)
+
+# Environment setup
+env-build                      # Build .env file from templates
+env-export                     # Export environment variables
+```
+
+### Script Integration
+```bash
+# Environment configuration (unified)
+set-dev-settings              # Configure development environment
+set-prod-settings             # Configure production environment  
+set-central-settings          # Configure central node environment
+
+# Utility scripts
+gpu-check                     # GPU/CUDA diagnostics
+ensure-psql                   # PostgreSQL availability check
+```
+
+## 🎯 Tests
+
+Integration tests are marked with the `integration` pytest marker and are deselected by default (see `pytest.ini`). The repository includes a focused integration module at `tests/test_database_connectivity.py` that validates DB connectivity, migrations and permissions.
+
+How to run
+
+- Run the module via pytest (recommended):
+  - Run this specific integration module:
+    ```bash
+    pytest -q -m integration tests/test_database_connectivity.py
+    ```
+  - Run all integration tests:
+    ```bash
+    pytest -q -m integration
+    ```
+
+- Run the test file directly (convenient for local/manual runs):
+  ```bash
+  python tests/test_database_connectivity.py
+  ```
+
+Notes
+
+- By design these tests may be skipped when required environment, credentials or tools are not available:
+  - `nix-instantiate` is used to read `app_config.nix` (ensure Nix is available in your PATH),
+  - If a DB password file is not present the tests will be skipped rather than fail.
+
+- psycopg v3 compatibility: psycopg expects the connection parameter `dbname` instead of `database`.
+  The test module normalizes connection kwargs automatically to be compatible with psycopg v3 and psycopg2.
+
+- Prefer running via `pytest` for richer reporting and for the project-wide pytest configuration to be applied. Running the file directly uses a small script runner that returns a simple pass/skip/fail summary.
+
+## 🏗️ Architecture
+
+### Mode-Based Configuration
+The application operates in two primary modes that automatically configure all components:
+
+| Component | Development Mode | Production Mode |
+|-----------|------------------|-----------------|
+| **Database** | SQLite (local file) | PostgreSQL (external) |
+| **Server** | Django dev server | Daphne ASGI server |
+| **Host Binding** | localhost/127.0.0.1 | 0.0.0.0 |
+| **Debug Mode** | Enabled | Disabled |
+| **Static Files** | Served by Django | Collected for nginx |
+| **Dependencies** | Local services available | External services expected |
+
+### Scripts Organization
+```
+scripts/
+├── README.md                   # 📘 Comprehensive usage guide
+├── core/                       # 🎯 Essential operations
+│   ├── environment.py          # Environment configuration
+│   ├── setup.py               # Initial environment setup
+│   └── system-validation.sh   # System validation with JSON output
+├── database/                   # 🗄️ Database utilities
+│   ├── ensure_psql.py          # PostgreSQL setup
+│   ├── fetch_db_pwd_file.py   # Password management
+│   └── make_conf.py           # Configuration generation
+├── utilities/                  # 🛠️ General utilities
+│   ├── gpu-check.py           # GPU diagnostics
+│   └── test_luxnix_compatibility.py # Compatibility testing
+├── cuda/                      # ⚙️ CUDA diagnostics
+│   └── [Specialized CUDA tools]
+└── archive/                   # 🗃️ Legacy/completed scripts
+    └── [Historical implementations]
+```
+
+### Directory Structure
+```
+endo-api/
+├── app_config.nix              # 🔧 Centralized configuration
+├── devenv.nix                  # 🐚 Development environment
+├── manage                      # 🎮 Unified management script
+├── devenv/                     # 📦 Modular DevEnv components
+├── container/                  # 🐳 Container infrastructure
+├── scripts/                    # 🔨 Organized utility scripts
+├── endo_api/                   # 🐍 Django application
+├── data/                       # 💾 Application data
+└── docs/                       # 📚 Documentation and guides
+```
+
+### DevEnv Components
+```
+devenv/
+├── management.nix              # 🎯 Unified management system
+├── scripts.nix                # 🔄 Core DevEnv scripts
+├── environment.nix             # 🌍 Environment variables
+├── build_inputs.nix            # 📚 System dependencies
+└── runtime_packages.nix        # 🏃 Runtime packages
+```
+
+### Container Infrastructure
+```
+container/
+├── Dockerfile.dev              # 🏗️ Development container
+├── Dockerfile.prod             # 🏭 Production container
+├── docker-entrypoint.sh        # 🚀 Development entrypoint
+├── docker-entrypoint-prod.sh   # 🚀 Production entrypoint
+└── README.md                   # 📖 Container documentation
+```
+
+## 🔧 Configuration
+
+### Centralized Configuration
+All application settings are managed through `app_config.nix`:
+
+```nix
+{
+  app = {
+    name = "endo-api";
+    djangoModule = "endo_api";
+    version = "1.0.0";
+  };
+  
+  server = {
+    host = "localhost";
+    port = "8118";
+    protocol = "http";
+  };
+  
+  # ... additional settings
 }
-
-# Full Devenv Utils submodule
-pkgs = import <nixpkgs> {}
-defaultNix = import ./devenv/default.nix
-defaultNix {
-  pkgs = pkgs;
-  djangoModuleName = "endo_api";
-  host = "localhost";
-  port = "8118";
-  dataDir = "data";
-  confDir = "./conf";
-  uvPackage = pkgs.uv; 
-}
-
 ```
 
-## Legacy Deployment Notes (Luxnix)
+### Customization
+To customize the application:
 
-> **Note**: These manual steps are mostly automated in newer versions. This section is kept for reference and troubleshooting.
+1. **Edit Configuration**: Modify `app_config.nix`
+2. **Reload Environment**: `direnv reload`
+3. **Rebuild if Needed**: `manage docker-*-build` (for containers)
 
-If you're using a system configured with luxnix (https://github.com/wg-lux/luxnix), you may need to run additional setup steps:
-
-### Initial Deployment Steps:
-
-1. **First rebuild** after activating the endo-api service takes time as dependencies are built
-2. **Check logs**: `sudo journalctl -xeu endo-api-boot.service` (close and re-open for updates)
-3. **Common issues**:
-   - May fail initially due to timing issues with .env file creation
-   - Ensure database password file exists: `/home/endoreg-service-user/endo-api/conf/db_pwd`
-   - Run PostgreSQL setup: `ensure-psql` (requires sudo privileges)
-4. **Restart service**: `sudo systemctl restart endo-api-boot.service`
-
-### Manual Database Setup (if needed):
+### Environment Variables
+The system supports environment variable overrides:
 
 ```bash
-# Ensure PostgreSQL is configured
-sudo -u postgres ensure-psql
-
-# Verify database connection
-python manage.py check --database default
-
-# Run migrations if needed
-python manage.py migrate
+export DJANGO_PORT=8080         # Override default port
+export DJANGO_ENV=production    # Override mode
+manage status                   # Verify changes
 ```
 
-### Service Management:
+---
 
-```bash
-# Check service status
-sudo systemctl status endo-api-boot.service
+### Docker/Podman caches
+```
+# Disk cleanup (Docker / Podman)
+# ⚠️ WARNING: These commands delete unused containers/images/caches.
+# ⚠️ Your next build may be slower because caches are cleared.
+# ⚠️ Do NOT remove images your cluster is actively using.
 
-# View real-time logs
-sudo journalctl -u endo-api-boot.service -f
+# 1) Inspect usage
+docker system df
+docker system df -v   # detailed per image/container
 
-# Restart service
-sudo systemctl restart endo-api-boot.service
+# 2) Stop & remove stopped containers (safe)
+docker ps -a --format 'table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}'
+docker container prune -f
+
+# 3) Remove dangling images (untagged layers, safe)
+docker image prune -f
+# Fallback if some <none>:<none> remain:
+IMGS="$(docker images -q --filter 'dangling=true')"; [ -n "$IMGS" ] && docker rmi -f $IMGS
+docker rmi -f $(docker images -q --filter "dangling=true")
+
+# 4) Remove unused images (not used by any container)
+# Safer (only images older than 10 days):
+docker image prune -a -f --filter "until=240h"
+# Or nuke all unused images:
+# docker image prune -a -f
+
+# 5) Clear build cache (often the biggest win)
+docker builder prune -a -f
+# If you use buildx:
+docker buildx prune -a -f
+
+# 6) If an image is "in use" but you don't need the container(s)
+# Replace IMGID with an image ID from `docker system df -v`
+docker ps -a --filter ancestor=IMGID --format '{{.ID}}\t{{.Image}}\t{{.Names}}'
+docker rm -f $(docker ps -a --filter ancestor=IMGID -q)
+docker rmi -f IMGID
+
+# 7) (Optional, aggressive) prune everything unused incl. volumes
+docker system prune -a --volumes -f
+
+# 8) Podman (only if you used it)
+podman system df || true
+podman ps --all --external || true
+podman system prune -a --volumes -f || true
+# If an image is "in use", remove the referencing container(s) first, then:
+# podman rmi -f <image_id_or_name>
+
+# 9) Verify reclaimed space
+docker system df -v
+df -h | grep -E '^/|Filesystem'
+
 ```
 
-## Security Considerations
-
-### Development Environment:
-- **Secret Keys**: Use generated secrets, never commit them to version control
-- **Debug Mode**: Only enable in development environments
-- **Database**: SQLite is used for development, never in production
-- **CORS**: Permissive settings for local development only
-
-### Production Environment (Luxnix):
-- **Secret Management**: All secrets managed through luxnix vault system
-- **SSL/TLS**: Automatically configured by luxnix deployment
-- **Database**: PostgreSQL with proper authentication and encryption
-- **CORS**: Restricted to known nodes and domains
-- **File Permissions**: Managed by NixOS user/group permissions
-
-### Central Node Additional Security:
-- **Network Isolation**: Central nodes may have access to wider network ranges
-- **Authentication**: Serves as authentication provider for local nodes
-- **Data Access**: Has broader data access privileges across the network
-- **Monitoring**: Enhanced logging and monitoring capabilities
-
-## Contributing
-
-### Code Quality:
-- Follow Python/Django best practices
-- Test luxnix compatibility with `test-luxnix-compatibility`
-- Ensure environment variables are properly documented
-- Test both development and production configurations
-
-### Environment Changes:
-- Update both `devenv.nix` and documentation when adding new environment variables
-- Test compatibility with both manual and luxnix deployments
-- Update the compatibility test script when adding new features
-
-### Deployment Testing:
-- Test in development environment first
-- Verify luxnix compatibility
-- Test central node configurations if applicable
-- Document any new setup requirements
-
+*Last updated: September 2025*  
+*System Version: DevEnv Unified Management v2.1 (Docker/Podman)*

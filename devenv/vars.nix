@@ -2,6 +2,7 @@
   dataDir,
   confDir,
   confTemplateDir,
+  homeDir,
   djangoModuleName,
   host,
   port,
@@ -20,7 +21,8 @@ let
   libDir = "./libs/";
   lxAnonymizerDir = "${libDir}/lx-anonymizer";
   endoregDbDir = "${libDir}/endoreg-db";
-  homeDir = builtins.getEnv "HOME";
+  # Use current working directory's parent as a more reliable home reference
+  # homeDir = "/home/admin";  # TODO: Make this configurable via app_config.nix
 
   lx_vars = {
     DJANGO_MODULE = djangoModuleName;
@@ -43,8 +45,7 @@ let
     CONF_DIR = confDir; 
     CONF_TEMPLATE_DIR = confTemplateDir;
     DB_PWD_FILE = "${confDir}/db_pwd";
-    DB_CONFIG_FILE = "${confDir}/db.yaml";
-    WORKING_DIR = builtins.getEnv "PWD";
+    # WORKING_DIR is derived at runtime from the shell context
     HOME_DIR = homeDir;
     BASE_URL = "http://${host}:${port}";
     FILE_LOG_LEVEL = "INFO";

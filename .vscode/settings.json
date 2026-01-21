@@ -1,3 +1,4 @@
 {
-    "python.defaultInterpreterPath": "${workspaceFolder}/.devenv/state/venv/bin/python"
+    "python.defaultInterpreterPath": "${workspaceFolder}/.devenv/state/venv/bin/python",
+    "ansible.python.interpreterPath": "${workspaceFolder}/.devenv/state/venv/bin/python"
 }

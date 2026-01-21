@@ -3,6 +3,8 @@ let
   buildInputs = with pkgs; [
     python312
     stdenv.cc.cc
+    gcc-unwrapped
+    glibc
     tesseract
     glib
     openssh
@@ -11,6 +13,10 @@ let
     pkg-config
     protobuf
     libglvnd
+    zlib
+    cudaPackages.cudatoolkit
+
   ];
+  
 
 in buildInputs

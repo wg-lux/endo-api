@@ -1,0 +1,350 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  annotations:
+    build-timestamp: '20250916130419'
+    cni.projectcalico.org/containerID: da9936ddcf368e58286862127871000beef18e82b2703806de893dfd1350f702
+    cni.projectcalico.org/podIP: 10.42.0.211/32
+    cni.projectcalico.org/podIPs: 10.42.0.211/32
+    kubectl.kubernetes.io/restartedAt: '2025-09-16T15:08:47+02:00'
+  creationTimestamp: '2025-09-16T13:08:47Z'
+  generateName: endo-api-7c6599cfdd-
+  generation: 1
+  labels:
+    app: endo-api
+    pod-template-hash: 7c6599cfdd
+  managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:build-timestamp: {}
+            f:kubectl.kubernetes.io/restartedAt: {}
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"bf04a120-65ff-4879-8c4b-fda56ad82566"}: {}
+        f:spec:
+          f:containers:
+            k:{"name":"api"}:
+              .: {}
+              f:envFrom: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:livenessProbe:
+                .: {}
+                f:failureThreshold: {}
+                f:httpGet:
+                  .: {}
+                  f:path: {}
+                  f:port: {}
+                  f:scheme: {}
+                f:initialDelaySeconds: {}
+                f:periodSeconds: {}
+                f:successThreshold: {}
+                f:timeoutSeconds: {}
+              f:name: {}
+              f:ports:
+                .: {}
+                k:{"containerPort":8118,"protocol":"TCP"}:
+                  .: {}
+                  f:containerPort: {}
+                  f:protocol: {}
+              f:readinessProbe:
+                .: {}
+                f:failureThreshold: {}
+                f:httpGet:
+                  .: {}
+                  f:path: {}
+                  f:port: {}
+                  f:scheme: {}
+                f:initialDelaySeconds: {}
+                f:periodSeconds: {}
+                f:successThreshold: {}
+                f:timeoutSeconds: {}
+              f:resources:
+                .: {}
+                f:limits:
+                  .: {}
+                  f:cpu: {}
+                  f:memory: {}
+                f:requests:
+                  .: {}
+                  f:cpu: {}
+                  f:memory: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+              f:volumeMounts:
+                .: {}
+                k:{"mountPath":"/app/data"}:
+                  .: {}
+                  f:mountPath: {}
+                  f:name: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext:
+            .: {}
+            f:fsGroup: {}
+          f:terminationGracePeriodSeconds: {}
+          f:volumes:
+            .: {}
+            k:{"name":"data"}:
+              .: {}
+              f:name: {}
+              f:persistentVolumeClaim:
+                .: {}
+                f:claimName: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: '2025-09-16T13:08:47Z'
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:cni.projectcalico.org/containerID: {}
+            f:cni.projectcalico.org/podIP: {}
+            f:cni.projectcalico.org/podIPs: {}
+      manager: calico
+      operation: Update
+      subresource: status
+      time: '2025-09-16T13:08:48Z'
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"PodReadyToStartContainers"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:hostIPs: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"10.42.0.211"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      subresource: status
+      time: '2025-09-16T13:12:49Z'
+  name: endo-api-7c6599cfdd-fjbht
+  namespace: endo-api
+  ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: endo-api-7c6599cfdd
+      uid: bf04a120-65ff-4879-8c4b-fda56ad82566
+  resourceVersion: '7489930'
+  uid: 9d8dabbd-9896-438d-8606-156e4dca753b
+spec:
+  containers:
+    - envFrom:
+        - secretRef:
+            name: endo-api-secrets
+        - configMapRef:
+            name: endo-api-config
+      image: moose1.xulutions.net/endo-api:1.0.4
+      imagePullPolicy: Always
+      livenessProbe:
+        failureThreshold: 3
+        httpGet:
+          path: /
+          port: 8118
+          scheme: HTTP
+        initialDelaySeconds: 30
+        periodSeconds: 20
+        successThreshold: 1
+        timeoutSeconds: 1
+      name: api
+      ports:
+        - containerPort: 8118
+          protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        httpGet:
+          path: /
+          port: 8118
+          scheme: HTTP
+        initialDelaySeconds: 10
+        periodSeconds: 10
+        successThreshold: 1
+        timeoutSeconds: 1
+      resources:
+        limits:
+          cpu: '1'
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+        - mountPath: /app/data
+          name: data
+        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          name: kube-api-access-6k84b
+          readOnly: true
+  dnsPolicy: ClusterFirst
+  enableServiceLinks: true
+  nodeName: k8s-server
+  preemptionPolicy: PreemptLowerPriority
+  priority: 0
+  restartPolicy: Always
+  schedulerName: default-scheduler
+  securityContext:
+    fsGroup: 10001
+  serviceAccount: default
+  serviceAccountName: default
+  terminationGracePeriodSeconds: 30
+  tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: endo-api-data
+    - name: kube-api-access-6k84b
+      projected:
+        defaultMode: 420
+        sources:
+          - serviceAccountToken:
+              expirationSeconds: 3607
+              path: token
+          - configMap:
+              items:
+                - key: ca.crt
+                  path: ca.crt
+              name: kube-root-ca.crt
+          - downwardAPI:
+              items:
+                - fieldRef:
+                    apiVersion: v1
+                    fieldPath: metadata.namespace
+                  path: namespace
+status:
+  conditions:
+    - lastProbeTime: null
+      lastTransitionTime: '2025-09-16T13:08:48Z'
+      status: 'True'
+      type: PodReadyToStartContainers
+    - lastProbeTime: null
+      lastTransitionTime: '2025-09-16T13:08:47Z'
+      status: 'True'
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: '2025-09-16T13:08:47Z'
+      message: 'containers with unready status: [api]'
+      reason: ContainersNotReady
+      status: 'False'
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: '2025-09-16T13:08:47Z'
+      message: 'containers with unready status: [api]'
+      reason: ContainersNotReady
+      status: 'False'
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: '2025-09-16T13:08:47Z'
+      status: 'True'
+      type: PodScheduled
+  containerStatuses:
+    - allocatedResources:
+        cpu: 100m
+        memory: 256Mi
+      containerID: >-
+        containerd://f7aa2262b89c1a3462e0dbe5017e70f6fc7aa22df4f94e1e22c8036af6dd8be3
+      image: moose1.xulutions.net/endo-api:1.0.4
+      imageID: >-
+        moose1.xulutions.net/endo-api@sha256:37ddcd5caef7da1c2c510c518e00aa2e35004ad3cfc407b90381348b08eaecb4
+      lastState:
+        terminated:
+          containerID: >-
+            containerd://4a4f0f764de2ca149bbc39614fbacd8a7f50881eb0172d3624a6e2f7288faec8
+          exitCode: 0
+          finishedAt: '2025-09-16T13:12:48Z'
+          reason: Completed
+          startedAt: '2025-09-16T13:11:28Z'
+      name: api
+      ready: false
+      resources:
+        limits:
+          cpu: '1'
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+      restartCount: 3
+      started: true
+      state:
+        running:
+          startedAt: '2025-09-16T13:12:48Z'
+      user:
+        linux:
+          gid: 0
+          supplementalGroups:
+            - 0
+            - 10001
+          uid: 0
+      volumeMounts:
+        - mountPath: /app/data
+          name: data
+        - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          name: kube-api-access-6k84b
+          readOnly: true
+          recursiveReadOnly: Disabled
+  hostIP: 213.133.99.8
+  hostIPs:
+    - ip: 213.133.99.8
+    - ip: 2a01:4f8:a0:93ba::2
+  phase: Running
+  podIP: 10.42.0.211
+  podIPs:
+    - ip: 10.42.0.211
+  qosClass: Burstable
+  startTime: '2025-09-16T13:08:47Z'

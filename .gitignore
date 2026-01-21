@@ -1,5 +1,16 @@
+endo-api-*.tar
+
 # environment
+status-summary.json
 .env
+.env.local
+.env.development
+.env.production
+.secrets
+.secret
+*.secret
+.mode
+.mode-env
 conf/
 data/
 *.sqlite3

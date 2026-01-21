@@ -1,6 +1,6 @@
 [project]
 name = "endo-api"
-version = "1.0.0"
+version = "1.0.2"
 description = "EndoReg Db API Service"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -30,37 +30,38 @@ dependencies = [
     "daphne>=4.2.1",
     "django-cors-headers>=4.7.0",
     "django-extensions>=4.1",
-    "endoreg-db",
-    "lx-anonymizer",
+    "endoreg-db>=0.8.2",
     "mypy>=1.17.1",
+    "nvidia-ml-py>=13.580.65",
     "psycopg[binary]>=3.2.9",
 ]
 
 [project.optional-dependencies]
 dev = [
-    # Add development tools here, e.g.:
-    # "pytest",
+    "pytest>=8.0.0",
     # "ruff",
-    # "black",
 ]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build.targets.wheel]
+packages = ["endo_api", "config"]
+
 [tool.setuptools]
-packages = ["endo_api"]
+packages = ["endo_api", "config"]
 
 [tool.uv.sources]
 # This section tells uv (used by devenv) to use local paths instead of PyPI
 # uv should install these editably by default for path sources.
 # Ensure the paths are correct relative to *this* pyproject.toml file.
 # # Ensure the target directories contain their own pyproject.toml or setup.py.
-endoreg-db = { path = "libs/endoreg-db", editable = true } # Explicitly editable
-lx-anonymizer = { path = "libs/lx-anonymizer", editable = true } # Explicitly editable
+# endoreg-db = { path = "libs/endoreg-db", editable = true } # Explicitly editable
+# lx-anonymizer = { path = "libs/lx-anonymizer", editable = true } # Explicitly editable
 
 [tool.uv] # Remove when endoreg-db pyproject.toml is updated to not include a local endoreg-db source
-override-dependencies = ["lx-anonymizer==0.7.0"]
+# override-dependencies = ["lx-anonymizer==0.7.0"]
 
 # Linting configuration for luxnix compatibility
 [tool.ruff]

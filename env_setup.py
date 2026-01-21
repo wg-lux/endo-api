@@ -1,188 +1,170 @@
-from typing import Dict
-from django.core.management.utils import get_random_secret_key
 import os
-import json
-from pathlib import Path
 import shutil
+from pathlib import Path
+from typing import Iterable, Set
+
+from django.core.management.utils import get_random_secret_key
 
 
 # --- Constants ---
-DEFAULT_DB_PASSWORD = "changeme_in_production" # Placeholder password
-
-# --- Load Envoronment Variables ---
-# Include luxnix-specific environment variables
-nix_vars = {
-    "WORKING_DIR": os.environ.get("WORKING_DIR" ),
-    "CONF_DIR": os.environ.get("CONF_DIR",),
-    "HOME_DIR": os.environ.get("HOME_DIR"),
-    "DJANGO_MODULE": os.environ.get("DJANGO_MODULE"),
-    "DJANGO_HOST": os.environ.get("DJANGO_HOST"),
-    "DB_PWD_FILE": os.environ.get("DB_PWD_FILE"),
-    "DJANGO_PORT": os.environ.get("DJANGO_PORT"),
-    "DATA_DIR": os.environ.get("DATA_DIR"),
-    "IMPORT_DIR": os.environ.get("IMPORT_DIR", "data/import"),
-    "IMPORT_VIDEO_DIR": os.environ.get("IMPORT_VIDEO_DIR", "data/import/video"),
-    "IMPORT_REPORT_DIR": os.environ.get("IMPORT_REPORT_DIR", "data/import/report"),
-    "MODEL_DIR": os.environ.get("MODEL_DIR", "data/model"),
-    "CONF_TEMPLATE_DIR": os.environ.get("CONF_TEMPLATE_DIR", "./conf_template"),
-    "DJANGO_SETTINGS_MODULE_PRODUCTION": os.environ.get("DJANGO_SETTINGS_MODULE_PRODUCTION"),
-    "DJANGO_SETTINGS_MODULE_DEVELOPMENT": os.environ.get("DJANGO_SETTINGS_MODULE_DEVELOPMENT"),
-    # Add luxnix central node support
-    "DJANGO_SETTINGS_MODULE_CENTRAL": os.environ.get("DJANGO_SETTINGS_MODULE_CENTRAL"),
-    "STORAGE_DIR": os.environ.get("STORAGE_DIR", "data/storage"),
-
-}
-
-nix_vars_paths: Dict[str, Path] = {}
-for key, value in nix_vars.items():
-    if value is None:
-        raise ValueError(f"Missing required environment variable: {key}")
-    if key.endswith("_DIR") or key.endswith("_FILE"):
-        assert isinstance(value, str), f"Environment variable {key} must be a string"
-        # Ensure no quotes around values
-        if value.startswith('"') and value.endswith('"'):
-            _var = value[1:-1].strip()
-        elif value.startswith("'") and value.endswith("'"):
-            _var = value[1:-1].strip()
-        else:
-            _var = value.strip()
-        nix_vars_paths[key] = Path(_var).resolve()
-
-conf_dir = nix_vars_paths["CONF_DIR"]
-db_pwd_file = nix_vars_paths["DB_PWD_FILE"]
-working_dir = nix_vars_paths["WORKING_DIR"]
-conf_template_dir = nix_vars_paths["CONF_TEMPLATE_DIR"]
-env_template_file = conf_template_dir / "default.env"
-db_template_file = conf_template_dir / "db.yaml"
+DEFAULT_DB_PASSWORD = "changeme_in_production"  # Placeholder password
 
 
-# --- Generate Secrets ---
-SALT = get_random_secret_key()
-SECRET_KEY = get_random_secret_key()
+def _normalize_path(value: Path | str) -> Path:
+    """Return an absolute path with user and quotes resolved."""
 
-# --- Ensure conf dir and db_pwd file exist ---
-print(f"Checking configuration directory: {conf_dir}")
-if not conf_dir.exists():
-    print(f"Creating configuration directory: {conf_dir}")
-    conf_dir.mkdir(parents=True, exist_ok=True)
-else:
-    print("Configuration directory already exists.")
+    if isinstance(value, Path):
+        path = value
+    else:
+        cleaned = value.strip().strip("'\"")
+        path = Path(cleaned)
+    return path.expanduser().resolve()
 
-print(f"Checking database password file: {db_pwd_file}")
+
+def _resolve_env_path(env_name: str, default: Path) -> Path:
+    raw = os.environ.get(env_name)
+    if raw:
+        return _normalize_path(raw)
+    return _normalize_path(default)
+
+
+def _collect_keys(lines: Iterable[str]) -> Set[str]:
+    keys: Set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _ = stripped.split("=", 1)
+        keys.add(key.strip())
+    return keys
+
+
+def _ensure_parent(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _ensure_quoted_value(lines: list[str], key: str) -> None:
+    """Ensure the given key has a double-quoted value in the .env lines."""
+
+    prefix = f"{key}="
+    for index, raw_line in enumerate(lines):
+        stripped = raw_line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not stripped.startswith(prefix):
+            continue
+
+        value = stripped[len(prefix) :].strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            return
+
+        unquoted = value.strip('"').strip("'")
+        lines[index] = f'{key}="{unquoted}"'
+        return
+
+
+# --- Resolve key paths ---
+conf_dir = _resolve_env_path("CONF_DIR", Path("./conf"))
+conf_dir.mkdir(parents=True, exist_ok=True)
+print(f"Configuration directory: {conf_dir}")
+
+db_pwd_file = _resolve_env_path("DB_PWD_FILE", conf_dir / "db_pwd")
+_ensure_parent(db_pwd_file)
 if not db_pwd_file.exists():
-    print(f"Database password file not found. Creating '{db_pwd_file}' with default password.")
     try:
-        with open(db_pwd_file, 'w', encoding='utf-8') as f:
-            f.write(DEFAULT_DB_PASSWORD)
-        print(f"Successfully created '{db_pwd_file}'. IMPORTANT: Change the default password for production!")
-    except IOError as e:
-        print(f"ERROR: Failed to create database password file '{db_pwd_file}': {e}")
+        db_pwd_file.write_text(DEFAULT_DB_PASSWORD, encoding="utf-8")
+        print(f"Created database password file at {db_pwd_file} (remember to change it in production).")
+    except OSError as exc:
+        print(f"ERROR: Unable to create database password file '{db_pwd_file}': {exc}")
 else:
-    print("Database password file already exists.")
+    print(f"Database password file already present at {db_pwd_file}.")
+
+conf_template_dir = _resolve_env_path("CONF_TEMPLATE_DIR", Path("./conf_template"))
+
+env_template_candidates = []
+env_template_override = os.environ.get("ENV_TEMPLATE_FILE")
+if env_template_override:
+    env_template_candidates.append(_normalize_path(env_template_override))
+
+env_template_candidates.append(_normalize_path(Path(".env.example")))
+env_template_candidates.append(_normalize_path(conf_template_dir / "default.env"))
+
+env_template_file = next((candidate for candidate in env_template_candidates if candidate.exists()), None)
+if env_template_file is None:
+    raise FileNotFoundError(
+        "Unable to locate an environment template. Expected one of: ENV_TEMPLATE_FILE, .env.example, "
+        f"or {conf_template_dir / 'default.env'}."
+    )
+
+print(f"Using environment template: {env_template_file}")
 
 
 # --- Manage .env file ---
-# env_template_file = Path("./conf/default.env")
-target = Path(".env") # .env should be in the working_dir (project root)
-
-# Create a new .env file from template if it doesn't exist
-if not target.exists():
-    print(f"Creating .env file from template: {env_template_file}")
-    try:
-        shutil.copy(env_template_file, target)
-    except Exception as e:
-        print(f"Error copying template {env_template_file} to {target}: {e}")
+target_env = Path(".env")
+if not target_env.exists():
+    shutil.copy(env_template_file, target_env)
+    print(f"Created .env file from template: {env_template_file}")
 else:
-    print(".env file already exists. Updating...")
+    print(".env file already exists; merging missing keys from template.")
 
-# Track what we've found or added in .env
-found_keys = set()
+try:
+    existing_lines = target_env.read_text(encoding="utf-8").splitlines()
+except OSError as exc:
+    raise RuntimeError(f"Unable to read .env file at {target_env}: {exc}") from exc
 
-# Read existing entries from .env
-lines = []
-if target.exists():
-    try:
-        with target.open("r", encoding="utf-8") as f:
-            lines = f.readlines()
-    except IOError as e:
-        print(f"Error reading .env file {target}: {e}")
+existing_keys = _collect_keys(existing_lines)
 
+try:
+    template_lines = env_template_file.read_text(encoding="utf-8").splitlines()
+except OSError as exc:
+    raise RuntimeError(f"Unable to read template file at {env_template_file}: {exc}") from exc
 
-# Process and update entries
-updated_lines = []
-django_settings_production = nix_vars.get("DJANGO_SETTINGS_MODULE_PRODUCTION")
-django_settings_development = nix_vars.get("DJANGO_SETTINGS_MODULE_DEVELOPMENT")
-django_module_from_nix = nix_vars.get("DJANGO_MODULE")
-
-for line in lines:
-    stripped_line = line.strip()
-    if not stripped_line or stripped_line.startswith("#"):
-        updated_lines.append(line)
+appended_from_template = 0
+for raw_line in template_lines:
+    stripped = raw_line.strip()
+    if not stripped or stripped.startswith("#") or "=" not in stripped:
         continue
 
-    if "=" not in stripped_line:
-        updated_lines.append(line)
-        continue
-
-    key, value = stripped_line.split("=", 1)
+    key, _ = stripped.split("=", 1)
     key = key.strip()
-    found_keys.add(key)
-    # Keep existing line if no specific update rule matched
-    updated_lines.append(line)
+    if key in existing_keys:
+        continue
+
+    if existing_lines and existing_lines[-1].strip():
+        existing_lines.append("")  # keep visual separation
+    existing_lines.append(raw_line)
+    existing_keys.add(key)
+    appended_from_template += 1
+
+if appended_from_template:
+    print(f"Added {appended_from_template} missing entr{'y' if appended_from_template == 1 else 'ies'} from template.")
 
 
-# Write updated content back to .env
+# --- Ensure secrets ---
+if "DJANGO_SECRET_KEY" not in existing_keys:
+    secret_key = get_random_secret_key()
+    if existing_lines and existing_lines[-1].strip():
+        existing_lines.append("")
+    existing_lines.append(f'DJANGO_SECRET_KEY="{secret_key}"')
+    existing_keys.add("DJANGO_SECRET_KEY")
+    print("Generated DJANGO_SECRET_KEY and appended to .env.")
+
+if "DJANGO_SALT" not in existing_keys:
+    salt = get_random_secret_key()
+    if existing_lines and existing_lines[-1].strip():
+        existing_lines.append("")
+    existing_lines.append(f'DJANGO_SALT="{salt}"')
+    existing_keys.add("DJANGO_SALT")
+    print("Generated DJANGO_SALT and appended to .env.")
+
+_ensure_quoted_value(existing_lines, "DJANGO_SECRET_KEY")
+_ensure_quoted_value(existing_lines, "DJANGO_SALT")
+
+
+# --- Write updated .env ---
 try:
-    with target.open("w", encoding="utf-8") as f:
-        f.writelines(updated_lines)
-except IOError as e:
-    print(f"Error writing updated .env file {target}: {e}")
+    target_env.write_text("\n".join(existing_lines) + "\n", encoding="utf-8")
+except OSError as exc:
+    raise RuntimeError(f"Unable to write updated .env file at {target_env}: {exc}") from exc
 
-# Add any missing required entries to .env without quotes
-try:
-    with target.open("a", encoding="utf-8") as f:
-        # Add secrets if missing
-        if "DJANGO_SECRET_KEY" not in found_keys:
-            #f.write(f'\nDJANGO_SECRET_KEY={SECRET_KEY}') # No quotes
-            f.write(f'\nDJANGO_SECRET_KEY="{SECRET_KEY}"')  # QUOTED
-            print("Added DJANGO_SECRET_KEY to .env")
-
-        if "DJANGO_SALT" not in found_keys:
-            f.write(f'\nDJANGO_SALT={SALT}') # No quotes
-            print("Added DJANGO_SALT to .env")
-        
-
-        # Add paths and config from nix_vars if missing
-        # Ensure paths are NOT quoted
-        vars_to_add = {
-            "DJANGO_HOST": nix_vars.get("DJANGO_HOST"),
-            "DJANGO_PORT": nix_vars.get("DJANGO_PORT"),
-            "DJANGO_CONF_DIR": str(conf_dir),
-            "HOME_DIR": str(nix_vars_paths.get("HOME_DIR")),
-            "WORKING_DIR": str(nix_vars_paths.get("WORKING_DIR")),
-            "STORAGE_DIR": str(nix_vars_paths.get("STORAGE_DIR")),
-            "DJANGO_DATA_DIR": str(nix_vars_paths.get("DATA_DIR")),
-            "DJANGO_IMPORT_DATA_DIR": str(nix_vars_paths.get("IMPORT_DIR")),
-            "DJANGO_VIDEO_IMPORT_DATA_DIR": str(nix_vars_paths.get("IMPORT_VIDEO_DIR")),
-            "DJANGO_SETTINGS_MODULE_PRODUCTION": nix_vars.get("DJANGO_SETTINGS_MODULE_PRODUCTION"),
-            "DJANGO_SETTINGS_MODULE_DEVELOPMENT": nix_vars.get("DJANGO_SETTINGS_MODULE_DEVELOPMENT"),
-            # "DJANGO_IMPORT_REPORT_DATA_DIR": str(nix_vars_paths.get("IMPORT_REPORT_DIR")),
-
-            # Other defaults
-            "TEST_RUN": "False",
-            "TEST_RUN_FRAME_NUMBER": "1000",
-            "RUST_BACKTRACE": "1",
-            "DJANGO_DEBUG": "True",
-            "DJANGO_FFMPEG_EXTRACT_FRAME_BATCHSIZE": "500",
-            "LABEL_VIDEO_SEGMENT_MIN_DURATION_S_FOR_ANNOTATION": "3" # Added missing default
-        }
-        for key, value in vars_to_add.items():
-            if value is not None and key not in found_keys:
-                f.write(f'\n{key}={value}') # No quotes
-                print(f"Added {key} to .env")
-
-except IOError as e:
-    print(f"Error appending missing entries to .env file {target}: {e}")
-
-
-print(f"Environment setup script finished. Check {target} and {db_pwd_file}")
+print(f"Environment setup complete. Review {target_env} and {db_pwd_file} as needed.")

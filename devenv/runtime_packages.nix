@@ -3,13 +3,16 @@ let
 
   runtimePackages = with pkgs; [
     stdenv.cc.cc
+    gcc-unwrapped
+    glibc
     ffmpeg-headless.bin
     tesseract
     uvPackage
     libglvnd 
     glib
     zlib
-    ollama.out
+    gnumake
+    cudaPackages.cudatoolkit
   ];
 
 
